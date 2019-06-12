@@ -207,7 +207,8 @@ landscapes <- ggplot(d, aes(x, y, fill=wind)) +
       geom_raster(fill=d$color) +
       facet_wrap(~ class, scales="free") +
       geom_point(aes(px, py), color="yellow") +
-      theme_void() # note: removing the legend or the fill aes breaks the plot :(
+      theme_void() +
+      theme(legend.position=c(-1, 0)) # because removing legend or fill aes breaks the plot
       
 scatter <- ggplot(d, aes(clim_fwd, wind)) +
       geom_point(color=d$color, size=2) +
