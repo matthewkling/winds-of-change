@@ -12,205 +12,152 @@ library(gdistance)
 library(colormap)
 library(grid)
 library(gridExtra)
+library(ecoclim)
 
 select <- dplyr::select
 
 
 stop("get functions from windshed_02_analysis script")
 
+f <- read_csv("data/windshed/force_500km_v2.csv") %>%
+      select(-runtime) %>%
+      gather(var, value, -x, -y) %>%
+      separate(var, c("property", "direction", "moment", "stat"), sep="_")
 
-#### find examples based on summary stats ####
 
-d <- read_csv("data/windshed/force_500km.csv") %>%
-      mutate(windfill_fwd = overlap_fwd / clim_fwd)
 
-e <- d %>%
-      filter(clim_fwd > .05, clim_fwd < 1) %>% # control for suitable area
-      # mutate(hf = ifelse(log10(windfill_fwd) > -1, "facilitation",
-      #                    ifelse(log10(windfill_fwd) < -3, "hindrance", NA)),
-      #        ia = ifelse(abs(log10(overlap_fwd / overlap_rev)) > 1, 
-      #                    "anisotropic", "isotropic")) %>%
-      # filter(!is.na(hf)) %>%
-      # group_by(hf, ia) %>%
-      # 
-      mutate(class = case_when(
-            log10(windfill_fwd) < -3.75 & # low filling 
-                  log10(wind_fwd) > -2.25 & log10(wind_fwd) < -2 & # moderate wind
-                  abs(log10(overlap_fwd / overlap_rev)) > 1 ~ # directionality (ish)
-                  "anisotropic hindrance",
-            log10(windfill_fwd) < -3.75 & # low filling 
-                  log10(wind_fwd) > -2.8 & log10(wind_fwd) < -2.6 & # low wind
-                  abs(log10(overlap_fwd / overlap_rev)) < .25 ~ # non-directionality (ish)
-                  "isotropic hindrance",
-            log10(windfill_fwd) > -1.25 & # high filling 
-                  log10(wind_fwd) > -2.25 & log10(wind_fwd) < -1.5 & # moderate wind
-                  abs(log10(overlap_fwd / overlap_rev)) > .75 ~ # directionality (ish)
-                  "anisotropic facilitation",
-            log10(windfill_fwd) > -1 & # high filling 
-                  log10(wind_fwd) > -1.5 & # high wind
-                  abs(log10(overlap_fwd / overlap_rev)) < .5 ~ # non-directionality (ish)
-                  "isotropic facilitation",
-            
-            TRUE ~ NA_character_)
-      ) %>%
-      filter(!is.na(class)) %>%
-      group_by(class) %>%
-      
-      sample_n(10) %>%
-      mutate(group_id = 1:length(wind_fwd)) %>%
-      ungroup() %>%
+   
+
+#### some random examples ####
+
+e <- f %>%
+      select(x, y) %>%
+      sample_n(48) %>%
       mutate(id = 1:nrow(.))
-nrow(e)
-
-
-
-
-#### get raster data ####
-
-#transform <- function(x) .5 ^ (x * 1e9) # .05
-transform <- function(x) x
 
 r <- map2(e$x, e$y, possibly(woc, NULL), 
-          windrose=wr, climate=climate, radius=500,
-          output="rasters", transform=transform)
+          windrose=rose, climate=climate, cost_to_flow=cost_to_flow, radius=500,
+          output="rasters")
 
-d <- r %>%
-      lapply(function(x) x %>%
-                   subset(c("wind_fwd", "clim_fwd")) %>%
-                   rasterToPoints() %>%
-                   as.data.frame())
-for(i in 1:length(d)) d[[i]]$id <- e$id[i]
-d <- d %>% bind_rows()
+d <- r %>% lapply(rasterToPoints) %>% lapply(as.data.frame)
+for(i in 1:length(d)) d[[i]]$id <- i
+d <- bind_rows(d)
 
-d <- e %>%
-      mutate(px = x, py = y) %>%
-      #select(hf, ia, group_id, id, px, py) %>%
-      select(class, group_id, id, px, py) %>%
-      left_join(d)
+d$color <- colors2d(select(d, clim_fwd, wind_fwd),
+                    c("green", "gold", "black", "cyan"))
 
-
-#### plot ####
-
-# wind_fwd is a cost metric, invert/convert to a diffusion metric 
-d <- mutate(d, wind= (1 - ecdf(wind_fwd)(wind_fwd)) ^ 2)
-
-
-#d$wind <- .005 ^ (d$wind_fwd * 1000)
-
-centers <- d %>%
-      select(px, py, class, group_id, id) %>%
-      distinct()
-
-p <- ggplot(d, aes(x, y, fill=wind)) +
-      geom_raster() +
-      facet_wrap(~ group_id + class, ncol=4, scales="free") +
-      geom_point(aes(px, py), color="red") +
-      scale_fill_viridis_c() +
-      theme_void() +
-      theme(strip.text = element_blank(),
-            plot.title=element_text(size=10)) +
-      labs(title = "anisotropic facilitation -- anisotropic hidrance -- isotropic facilitation -- isotropic hindrance")
-
-
-
-d$color <- colors2d(select(d, clim_fwd, wind),
-                    c("green", "gold", "black", "cyan4"))
-
-p <- ggplot(d, aes(x, y, fill=wind)) +
+maps <- ggplot(d, aes(x, y, fill=wind)) +
       geom_raster(fill=d$color) +
-      facet_wrap(~ group_id + class, ncol=4, scales="free") +
-      geom_point(aes(px, py), color="red") +
-      theme_void() + # note: removing the legend or the fill aes breaks the plot
+      facet_wrap(~ id, ncol=8, scales="free") +
+      #geom_point(aes(px, py), color="red") +
+      theme_void() + 
       theme(strip.text = element_blank(),
-            plot.title=element_text(size=10)) +
-      labs(title = "anisotropic facilitation -- anisotropic hidrance -- isotropic facilitation -- isotropic hindrance")
-p
-ggsave("figures/windsheds/examples.png", p, width=6, height=12, units="in")
+            plot.title=element_text(size=10))
+
+scatter <- ggplot(d, aes(clim_fwd, wind_fwd)) +
+      geom_point(color=d$color) +
+      theme_minimal() +
+      theme(plot.background = element_rect(fill="white", color="white")) +
+      labs(x = "climatic analogy",
+           y = "wind connectivity")
+png("figures/windsheds/examples.png", width=1000, height=750)
+plot(maps)
+plot(scatter, vp=viewport(x=0, y=1, width=.25, height=.333,
+                          just = c("left", "top")))
+dev.off()
 
 
 
 
 
 
-ggplot(d, aes(x, y, 
-              #fill=wind
-              fill=clim_fwd
-)) +
-      #facet_wrap(~ group_id + hf + ia, ncol=4, scales="free") +
-      facet_wrap(~ id, scales="free") +
-      geom_raster() +
-      geom_point(aes(px, py), color="red") +
-      #geom_contour() +
-      scale_fill_gradientn(colors=c("gray90", "darkblue")) +
-      theme_void() +
-      theme(legend.position="bottom")
+#### examples based on summary stats ####
 
-pd <- d %>% filter(id == 34)
-ggplot(pd, aes(x, y, 
-               z=wind, fill=clim_fwd
-)) +
-      geom_raster() +
-      stat_contour(geom='polygon', breaks=c(.1, .5, .9), 
-                   color="blue", fill="blue", alpha=.25) +
-      geom_point(aes(px, py)) +
-      scale_fill_gradientn(colors=c("gray90", "darkred")) +
-      theme_void() +
-      theme(legend.position="bottom")
+# classify by isotropy vs anisotropy, hindrance vs facilitation
+# and grab some prospective examples of each type
 
+d <- f %>%
+      filter(direction == "fwd",
+             moment == "windshed",
+             stat == "size") %>%
+      spread(property, value) %>%
+      mutate(windfill = overlap / clim)
+d <- f %>%
+      filter(direction == "fwd",
+             moment == "windshed",
+             property == "wind",
+             stat == "isotropy") %>%
+      rename(isotropy = value) %>%
+      select(x, y, isotropy) %>%
+      left_join(d, .)
 
+e <- d %>%
+      filter(clim > .05, clim < .1) %>% # control for suitable area
+      mutate(hf = case_when(windfill < .1 ~ "hindrance",
+                            windfill > .4 ~ "facilitation",
+                            TRUE ~ NA_character_),
+             ia = case_when(isotropy > .9 ~ "isotropic",
+                            isotropy > .5 ~ "anisotropic",
+                            TRUE ~ NA_character_)) %>%
+      na.omit() %>%
+      arrange(ia, hf) %>%
+      group_by(ia, hf) %>%
+      sample_n(10) %>%
+      ungroup() %>%
+      mutate(id = 1:nrow(.))
 
-pd <- d %>% filter(id == 34)
-ggplot(pd, aes(x, y)) +
-      geom_raster(fill=pd$color) +
-      geom_point(aes(px, py)) +
+r <- map2(e$x, e$y, possibly(woc, NULL), 
+          windrose=rose, climate=climate, cost_to_flow=cost_to_flow, radius=500,
+          output="rasters")
+
+d <- r %>% lapply(rasterToPoints) %>% lapply(as.data.frame)
+for(i in 1:length(d)) d[[i]]$id <- e$id[i]
+d <- bind_rows(d)
+
+d$color <- colors2d(select(d, clim_fwd, wind_fwd),
+                    c("green", "gold", "black", "cyan"))
+
+maps <- ggplot(d, aes(x, y)) +
+      geom_raster(fill=d$color) +
+      facet_wrap(~ id, nrow=4, scales="free") +
       theme_void()
+ggsave("figures/windsheds/archetype_candidates.png", maps, width=10, height=5, units="in")
 
 
-######## make an expository plot of nice examples #######
+# identify archetypes, get data, plot
 
-examples <- e %>%
-      filter(class=="isotropic facilitation" & group_id %in% c(4)) %>%
-      select(x, y)
+#archetype_af <- e[5,] # amazing example
+#archetype_ah <- e[18,] # ok example
+#archetype_ih <- e[40,] # great example
+#archetype_if <- e[27,] # ok example
 
-examples <- data.frame(x=c(9723770.1, -736629.9, 6439370, 10303370), 
-                       y=c(6380287, 1725787, 4727287, 5597287),
-                       class=c("anisotropic hindrance", "isotropic hindrance", 
-                               "anisotropic facilitation", "isotropic facilitation"),
-                       id=1:4)
+archetypes <- bind_rows(archetype_af, archetype_ah, archetype_if, archetype_ih) %>%
+      mutate(id = 1:nrow(.))
+saveRDS(archetypes, "figures/windsheds/archetypes.rds")
 
-r <- map2(examples$x, examples$y, possibly(woc, NULL), 
-          windrose=wr, climate=climate, radius=500,
-          output="rasters", transform=transform)
+r <- map2(archetypes$x, archetypes$y, possibly(woc, NULL), 
+          windrose=rose, climate=climate, cost_to_flow=cost_to_flow, radius=500,
+          output="rasters")
 
-d <- r %>%
-      lapply(function(x) x %>%
-                   rasterToPoints() %>%
-                   as.data.frame())
-for(i in 1:length(d)) d[[i]]$id <- e$id[i]
-d <- d %>% bind_rows()
+d <- r %>% lapply(rasterToPoints) %>% lapply(as.data.frame)
+for(i in 1:length(d)) d[[i]]$id <- archetypes$id[i]
+d <- bind_rows(d)
 
-d <- examples %>%
-      mutate(px = x, py = y) %>%
-      select(id, class, px, py) %>%
+d <- archetypes %>%
+      rename(cx = x, cy = y) %>%
       left_join(d)
 
-d <- mutate(d, wind= (1 - ecdf(wind_fwd)(wind_fwd)) ^ 2)
+d$color <- colors2d(select(d, clim_fwd, wind_fwd),
+                    c("green", "gold", "black", "cyan"))
 
-centers <- d %>%
-      select(px, py, class, id) %>%
-      distinct()
-
-d$color <- colors2d(select(d, clim_fwd, wind),
-                    c("green", "red", "black", "cyan3"))
-
-landscapes <- ggplot(d, aes(x, y, fill=wind)) +
+landscapes <- ggplot(d, aes(x, y)) +
       geom_raster(fill=d$color) +
-      facet_wrap(~ class, scales="free") +
-      geom_point(aes(px, py), color="yellow") +
+      facet_wrap(~ ia + hf, scales="free", nrow=2) +
+      geom_point(aes(cx, cy), color="red") +
       theme_void() +
-      theme(legend.position=c(-1, 0)) # because removing legend or fill aes breaks the plot
-      
-scatter <- ggplot(d, aes(clim_fwd, wind)) +
+      theme(strip.text=element_text(size=10))
+
+scatter <- ggplot(d, aes(clim_fwd, wind_fwd)) +
       geom_point(color=d$color, size=2) +
       theme_minimal() +
       labs(x="climatic similarity",
@@ -220,9 +167,10 @@ ld <- land %>% rasterToPoints() %>% as.data.frame()
 map <- ggplot() +
       geom_raster(data=ld, aes(x, y), fill="gray") +
       geom_raster(data=d, aes(x, y), fill="black") +
-      geom_point(data=centers, aes(px, py), color="red", size=1) +
+      geom_point(data=d, aes(cx, cy), color="red", size=1) +
       theme_void()
 
 p <- arrangeGrob(scatter, map, ncol=1, heights=c(1.5, 1))
 p <- arrangeGrob(landscapes, p, nrow=1, widths=c(1.5, 1))
-ggsave("figures/windsheds/landscape_examples.png", p, width=9, height=6, units="in")
+ggsave("figures/windsheds/archetypes.png", p, width=9, height=6, units="in")
+
