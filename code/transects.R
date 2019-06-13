@@ -169,19 +169,18 @@ p$wind
 
 add_tag <- function(x, tag){
       x$wind <- x$wind +
-            annotate(geom="text",
+            annotate(geom="text", label=tag,
                      x=min(x$data$x, na.rm=T),
                      y=min(x$data$clim0, na.rm=T),
-                     label=tag,
-                     hjust=0, size=5)
+                     hjust=0, size=6)
       x
 }
 
 # good ones
-brz <- transect_plot(brz$transect) %>% add_tag("\nBrazilian cerrado")
-aus <- transect_plot(aus$transect) %>% add_tag("\nAustrian continent")
-app <- transect_plot(app$transect) %>% add_tag("\nSouthern Appalachia")
-bc <- transect_plot(bc$transect) %>% add_tag("\nBritish Columbia")
+brz <- transect_plot(brz$transect) %>% add_tag("\nBrazilian\ncerrado")
+aus <- transect_plot(aus$transect) %>% add_tag("\nAustralian\ncontinent")
+app <- transect_plot(app$transect) %>% add_tag("\nSouthern\nAppalachia")
+bc <- transect_plot(bc$transect) %>% add_tag("\nBritish\nColumbia")
 
 p <- arrangeGrob(bc$wind, brz$wind, app$wind, aus$wind, ncol=2)
 ggsave("figures/transects/transects.png", p, width=12, height=9, units="in")
