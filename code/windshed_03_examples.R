@@ -17,7 +17,7 @@ library(ecoclim)
 select <- dplyr::select
 
 
-stop("get functions from windshed_02_analysis script")
+stop("get functions and input datasets from windshed_02_analysis script")
 
 f <- read_csv("data/windshed/force_500km_v2.csv") %>%
       select(-runtime) %>%
@@ -46,10 +46,10 @@ d <- bind_rows(d)
 d$color <- colors2d(select(d, clim_fwd, wind_fwd),
                     c("green", "gold", "black", "cyan"))
 
-maps <- ggplot(d, aes(x, y, fill=wind)) +
+maps <- ggplot(d, aes(x, y)) +
       geom_raster(fill=d$color) +
       facet_wrap(~ id, ncol=8, scales="free") +
-      #geom_point(aes(px, py), color="red") +
+      geom_point(data=e, aes(x, y), color="red") +
       theme_void() + 
       theme(strip.text = element_blank(),
             plot.title=element_text(size=10))
@@ -67,6 +67,46 @@ plot(scatter, vp=viewport(x=0, y=1, width=.25, height=.333,
 dev.off()
 
 
+
+### a single example of different landscape fields
+
+ex <- filter(d, id==2) %>%
+      select(-color, -id) %>%
+      gather(stat, value, -x, -y) %>%
+      separate(stat, c("property", "direction")) %>%
+      filter(property != "overlap") %>%
+      group_by(property, direction) %>%
+      mutate(value = scales::rescale(value)) %>%
+      spread(property, value) %>%
+      mutate(overlap = wind * clim) %>%
+      gather(property, value, wind, clim, overlap) %>%
+      ungroup() %>%
+      mutate(property = factor(property,
+                               levels = c("wind", "clim", "overlap"),
+                               labels = c("wind accessibility", "climate analogy",
+                                          "wind-climate overlap")),
+             direction = factor(direction,
+                                levels=c("fwd", "rev"),
+                                labels=c("forward (emigration)", "reverse (immigration)")))
+saveRDS(ex, "figures/windsheds/ex_dat.rds")
+
+center <- ex %>%
+      filter(property == "wind accessibility", 
+             direction == "forward (emigration)") %>%
+      filter(value == max(value)) %>%
+      select(x, y)
+
+p <- ggplot() +
+      facet_grid(direction ~ property) +
+      geom_raster(data=ex, aes(x, y, fill=value)) +
+      geom_point(data=center, aes(x, y), color="red", size=1) +
+      scale_fill_gradientn(colors=c("gray90", "black")) +
+      theme_void() +
+      theme(strip.text.y = element_text(angle=-90),
+            legend.position="none") +
+      coord_fixed()
+ggsave("figures/windsheds/example_landscape.png", 
+       p, width=6, height=4, units="in")
 
 
 
