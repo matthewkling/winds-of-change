@@ -5,45 +5,55 @@ library(tidyverse)
 library(raster)
 
 
-# generate a windrose dataset for a single month of cfsr data
-cfsr_rose <- function(infile, outdir){
-      #infile <- f[2]
-      message(paste(basename(infile), "--", Sys.time()))
-      outfile <- paste0(outdir, "/", sub("grb2", "tif", basename(infile)))
-      if(file.exists(outfile)) return("skipped")
+cfsr_rose <- function(infile, outdir, ncores, weighting){
+      message(infile)
       
-      # load and collate data
-      w <- stack(infile)
-      even <- function(x) x %% 2 == 0
-      u <- w[[which(!even(1:nlayers(w)))]]
-      v <- w[[which(even(1:nlayers(w)))]]
-      w <- stack(u, v)
+      # file admin
+      outfile <- paste0(outdir, "/", basename(infile))
+      outfile <- sub("grb2", "tif", outfile)
+      if(any(file.exists(c(outfile,
+                           sub("\\.tif", paste0("_", ncores, ".tif"), outfile))))){
+            return("skipping")}
       
-      # some checks
-      if(nlayers(u) != nlayers(v)) stop("error1")
-      if(!all.equal(substr(names(u), 13, 18),
-                    substr(names(v), 13, 18))) stop("error2")
+      # load inventory file and identify layers to process
+      # (the "analysis" and "6-hour forecast" timesteps overlap)
+      inv <- paste0(infile, ".inv") %>%
+            readLines()
+      process <- which(!grepl("6 hour fcst", inv))
       
-      rose <- raster::calc(w, fun=windrose, forceapply=TRUE, filename=outfile)
-      
-      #beginCluster(7)
-      #rosefun <- function(x) calc(x, fun=windrose, forceapply=TRUE)
-      #rose <- clusterR(w, rosefun, filename=outfile)
-      #rose <- clusterR(w, calc, args = list(fun = windrose, forceapply = TRUE))
-      #writeRaster(rose, outfile)
-      #endCluster()
+      # generate windrose
+      x <- infile %>%
+            brick() %>%
+            subset(process) %>%
+            windrose_rasters(ncores=ncores, 
+                             weighting=weighting,
+                             outfile=outfile)
+      return("success")
 }
 
 
+# hourly input data
 f <- list.files("f:/CFSR/wnd10m", full.names=T)
 f <- f[!grepl("inv", f)]
-modir <- "data/roses/cfsr_monthly"
-lapply(f, cfsr_rose, outdir = modir)
 
 
-# sum the monthly roses
-f <- list.files(modir, full.names=T) %>%
+# velocity
+intdir <- "data/roses_velocity/cfsr_monthly"
+map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, weighting="velocity")
+f <- list.files(intdir, full.names=T) %>%
       lapply(stack) %>%
       Reduce("+", .) %>%
-      writeRaster("data/roses/cfsr_climatology/windrose_cfsr.tif", overwrite=T)
+      writeRaster("data/roses_velocity/cfsr_climatology/roses_cfsr_1980s.tif", overwrite=T)
+
+
+# force
+intdir <- "data/roses_force/cfsr_monthly"
+f <- f[grepl("gdas\\.20", f)]
+map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, weighting="force")
+
+f <- list.files(intdir, full.names=T)[1:12] %>%
+      lapply(stack) %>%
+      Reduce("+", .) %>%
+      "/"(24 * 365 * 1) %>%
+      writeRaster("data/roses_force/cfsr_climatology/roses_cfsr_1980s.tif", overwrite=T)
 
