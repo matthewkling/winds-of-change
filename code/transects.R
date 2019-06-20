@@ -47,10 +47,15 @@ names(climate) <- c("clim0", "clim1")
 transect_plot <- function(transect = NULL, n=25){
       
       if(is.null(transect)){
-            message("Click the map twice to draw an EAST-WEST transect, then hit ESC.")
+            message("Click the map twice to draw a bounding box around the area of interest.")
             plot(climate[[1]], 
-                 col=colorRampPalette(c("gray98" "cyan", "dodgerblue", "darkorchid", 
+                 col=colorRampPalette(c("gray98", "cyan", "dodgerblue", "darkorchid", 
                                         "red", "yellow"))(100))
+            ext <- drawExtent()
+            plot(climate[[1]] %>% crop(ext), 
+                 col=colorRampPalette(c("gray98", "cyan", "dodgerblue", "darkorchid", 
+                                        "red", "yellow"))(100))
+            message("Click the map twice to draw an EAST-WEST transect, then hit ESC.")
             transect <- drawLine()
       }
       
