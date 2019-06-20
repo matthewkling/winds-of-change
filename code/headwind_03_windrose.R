@@ -111,7 +111,7 @@ map <- ggplot() +
                  arrow = arrow(type="open", angle=10, length=unit(.2, "in")),
                  color = "black", size = .5) +
       scale_fill_gradientn(colors=c("gray97", "cyan", "dodgerblue", "darkblue",
-                                    "darkorchid", "darkred", "red", "gold")) +
+                                    "darkorchid", "darkred", "red", "yellow")) +
       theme_void() +
       theme(legend.position="none") +
       coord_cartesian(xlim=c(-180, 180),
