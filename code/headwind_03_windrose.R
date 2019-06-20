@@ -180,7 +180,7 @@ dev.off()
 
 
 
-
+### latitudinal patterns in meridional winds ###
 
 v <- mf[grepl("_v", mf)] %>% stack() %>% mean() %>% rotate() %>% stack(land) %>%
       rasterToPoints() %>% as.data.frame()
@@ -248,13 +248,18 @@ p <- ggplot(vs, aes(lat, ymin=0, ymax=v, y=v, color=land, fill=land)) +
       geom_hline(yintercept=0) +
       annotate(geom="segment", x=xb, xend=xb, y=0, yend=1) +
       annotate(geom="text", x=c(-75, -45, -15, 15, 45, 75), y=1,
+               angle=c(-75, -45, -15, 15, 45, 75) + c(90, 90, 90, -90, -90, -90), 
+               lineheight=.7, hjust=0.5,
                label=c("Polar\ncell", "Ferrel\ncell", "Hadley\ncell", 
                        "Hadley\ncell", "Ferrel\ncell", "Polar\ncell")) +
+      annotate(geom="text", x=xb, y=-.25, angle=xb, hjust=1, size=3,
+               label=c("Polar high", "Subpolar low", "Subtropical high", "Equatorial low", 
+                       "Subtropical high", "Subpolar low", "Polar high")) +
       scale_x_continuous(limits=c(-90, 270), breaks=xb, expand=c(0,0)) +
       scale_color_manual(values=c("red", "forestgreen", "blue")) +
       scale_fill_manual(values=c("red", "forestgreen", "blue")) +
       theme_minimal() +
-      theme(legend.position=c(.6, .6),
+      theme(legend.position=c(.55, .52),
             panel.grid.minor.x=element_blank(),
             panel.grid.major.x=element_blank()) +
       labs(x = NULL,
