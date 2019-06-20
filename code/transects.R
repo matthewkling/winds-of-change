@@ -268,7 +268,6 @@ climate <- list.files("data/cfsr_monthly/tmp2m", full.names=T)[1:24] %>%
       rasterToPoints() %>%
       as.data.frame()
 
-
 dp <- d %>% group_by(id) %>% arrange(dst) %>% slice(1)
 #world <- map_data("world")
 map <- ggplot() +
@@ -280,9 +279,9 @@ map <- ggplot() +
       geom_text(data=dp, aes(x, y-5, label=i), color="black", size=4) +
       # scale_fill_gradientn(colors=c("gray97", "azure", "cyan", "dodgerblue", "blue",
       #                               "purple", "red", "orange", "yellow")) +
-      scale_fill_gradientn(colors=c("white", "#e6e6ff", "#e6e6ff", "darkmagenta", "#6b49ff", 
+      scale_fill_gradientn(colors=c("black", "black", "black", "darkmagenta", "#6b49ff", 
                                     "dodgerblue", "turquoise", "#48c13f", 
-                                    "yellow", "red", "#660000")) +
+                                    "gold", "red", "#660000")) +
       theme_void() +
       theme(legend.position="none") +
       scale_x_continuous(expand=c(0,0)) +
