@@ -30,20 +30,12 @@ total <- sum(windrose)
 directionality <- calc(windrose, Gini) # Gini: 1 = directionality, 0 = equality
 
 
-# plot
-
 s <- stack(total, directionality) %>%
       rasterToPoints() %>%
       as.data.frame() %>%
       rename(total = layer.1,
              directionality = layer.2) %>%
       filter(is.finite(total), is.finite(directionality))
-s$color <- colors2d(dplyr::select(s, total, directionality),
-                    c("gold", 
-                      "forestgreen", 
-                      "darkblue",
-                      "red"),
-                    xtrans="rank", ytrans="rank")
 
 
 
@@ -68,18 +60,39 @@ a <- wm %>%
       as.data.frame() %>%
       rename(a = layer.2, m = layer.1) %>%
       mutate(radians = (90 - a) / 190 * pi)
+aland <- wm %>% mask(aggregate(land, agg)) %>%
+      rasterToPoints() %>%
+      as.data.frame() %>%
+      rename(a = layer.2, m = layer.1) %>%
+      mutate(radians = (90 - a) / 190 * pi)
+
 
 ## plot
 
+# s$color <- colors2d(dplyr::select(s, total, directionality),
+#                     c("gold", "forestgreen", "darkblue", "red"),
+#                     xtrans="rank", ytrans="rank")
+
+s$color <- colors2d(dplyr::select(s, total, directionality),
+                    c("yellow", "green", "dodgerblue", "red"),
+                    xtrans="rank", ytrans="rank")
+
+ocean <- land %>%
+      reclassify(c(NA, NA, 1,
+                   .5, 1.5, NA)) %>%
+      rasterToPoints() %>%
+      as.data.frame()
 
 map <- ggplot() +
       geom_raster(data=s, aes(x, y), fill = s$color) +
-      geom_spoke(data=a, aes(x, y, angle=radians, radius=.1),
+      geom_spoke(data=aland, aes(x, y, angle=radians, radius=.1),
                  arrow = arrow(type="open", angle=10, length=unit(.2, "in")),
-                 color = "white", size = .5) +
+                 color = "black", size = .5) +
+      #geom_raster(data=ocean, aes(x, y), fill = "white") +
       theme_void() +
       coord_cartesian(xlim=c(-180, 180),
-                      ylim=c(-90, 90))
+                      ylim=c(-90, 90),
+                      expand = 0)
 
 legend <- ggplot(s, aes(total, directionality)) +
       geom_point(color=s$color, size=.1) +
@@ -90,7 +103,7 @@ legend <- ggplot(s, aes(total, directionality)) +
 
 png("figures/tailwinds/speed_isotropy_direction.png", width=2000, height=1000)
 plot(map)
-plot(legend, vp=viewport(x=.15, y=.37, width=.22, height=.44))
+plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
 dev.off()
 
 
@@ -115,7 +128,8 @@ map <- ggplot() +
       theme_void() +
       theme(legend.position="none") +
       coord_cartesian(xlim=c(-180, 180),
-                      ylim=c(-90, 90))
+                      ylim=c(-90, 90),
+                      expand=0)
 
 png("figures/tailwinds/temperature_direction.png", width=2000, height=1000)
 plot(map)
