@@ -222,7 +222,7 @@ if(F){
 
 d <- readRDS("data/transect_data.rds")
 
-labels <- c("Transverse mountain wind", "(California)", "Katabatic wind",
+labels <- c("Transverse mountain wind", "Sea breeze", "Katabatic wind",
             "Cross-desert wind", "Southwesterly", "Thermal low")
 for(i in 1:length(d)) d[[i]]$data$id <- labels[i]
 
@@ -232,23 +232,29 @@ d <- lapply(d, function(x) x$data) %>%
 
 d <- d %>%
       group_by(id) %>%
-      mutate(ymax = max(clim0) + .1 * diff(range(clim0, na.rm=T))) %>%
-      mutate(i = as.integer(id),
-             idi = paste0(i, ": ", id))
+      mutate(ymax = max(clim0) + .1 * diff(range(clim0, na.rm=T)),
+             i = as.integer(id),
+             idi = paste0(i, ": ", id),
+             scalar = diff(range(clim0, na.rm=T)) / max(abs(uwind), na.rm=T) / 5 ,
+             yend = ifelse(aligned==FALSE, clim0 + uwind * scalar, clim0 - uwind * scalar),
+             ymax = ifelse(ymax > yend, ymax, yend),
+             ymax = max(ymax, na.rm=T),
+             xend = dst + sign(uwind) * max(dst) / 50)
 
 ynudge <- 0
-arw <- arrow(type="closed", angle=15, length = unit(0.05, "inches"))
+arw <- arrow(type="closed", angle=15, length = unit(0.1, "in"))
 p <- ggplot(d) +
       facet_wrap(~idi, scales="free") +
       geom_ribbon(aes(dst, ymin=clim0, ymax=ymax), 
                   stat="identity", fill="gray90") +
-      geom_point(aes(dst, clim0, color=aligned), size=2) +
-      geom_segment(aes(x=dst, xend=dst+uwind,
-                       y=clim0+ynudge, yend=clim0+ynudge, color=aligned),
+      #geom_point(aes(dst, clim0, color=aligned), size=2) +
+      geom_segment(aes(x=dst, xend=xend,
+                       y=clim0, yend=clim0, 
+                       color=aligned),
                    arrow=arw, #color="blue", 
                    size=.3) +
-      # geom_segment(aes(x=dst, xend=dst+uclim,
-      #                  y=clim0-ynudge, yend=clim0-ynudge),
+      #geom_segment(aes(x=dst, xend=dst+uclim,
+      #                 y=clim0-ynudge, yend=clim0-ynudge),
       #              arrow=arw, color="black") +
       scale_color_manual(values=c("forestgreen", "red"), drop=F) +
       # annotate(geom="text", 
@@ -262,6 +268,7 @@ p <- ggplot(d) +
       scale_y_reverse() +
       labs(y = "temperature (°C; note flipped scale)", 
            x = "distance along transect (km)")
+
 #ggsave("figures/transects/transects.png", p, width=8, height=6, units="in")
 
 
@@ -324,13 +331,15 @@ vs <- v %>%
       summarize(v = mean(v),
                 temp =  mean(temp)) %>%
       mutate(aligned_lat = sign(lat) == sign(v),
-            dtemp = lead(temp) - lag(temp),
-            aligned_temp = sign(v) != sign(dtemp),
-            aligned_temp = ifelse(is.na(aligned_temp), aligned_lat, aligned_temp),
-            
-            xend = lat+sign(v)*15,
-            xend = ifelse(xend < -90, -90, xend),
-            xend = ifelse(xend > 90, 90, xend)  )
+             dtemp = lead(temp) - lag(temp),
+             aligned_temp = sign(v) != sign(dtemp),
+             aligned_temp = ifelse(is.na(aligned_temp), aligned_lat, aligned_temp),
+             
+             xend = lat+sign(v)*5,
+             xend = ifelse(xend < -90, -90, xend),
+             xend = ifelse(xend > 90, 90, xend),
+             
+             yend = temp + (v)*sign(dtemp)*15)
 
 xb <- seq(-90, 90, 30)
 
@@ -340,18 +349,22 @@ bands <- data.frame(x0 = xb[1:6], x1 = xb[2:7],
 
 
 mn <- -55
-mx <- 30
+mx <- 35
+arw <- arrow(type="closed", angle=15, length=unit(.1, "in"))
 latitude <- ggplot(vs %>% filter(land=="land")) +
       geom_rect(data=bands, aes(xmin=x0, xmax=x1, ymin=mn, ymax=mx, fill=winds),
                 alpha=.15) +
       geom_ribbon(aes(lat, ymin=temp, ymax=mx), 
                   stat="identity", fill="gray90") +
       geom_vline(xintercept=xb, color="white", size=1) +
-      geom_line(aes(lat, temp)) +
+      geom_line(aes(lat, temp), color="white", size=1) +
+      # geom_segment(aes(x=lat, xend=lat, y=temp, yend=yend,
+      #                  color = aligned_temp),
+      #              arrow = arw, size=.25) +
       geom_segment(aes(x=lat, xend=xend, y=temp, yend=temp,
                        color = aligned_temp),
                    arrow = arw, size=.25) +
-      geom_point(aes(x=lat, y=temp, color = aligned_temp), size=2) +
+      #geom_point(aes(x=lat, y=temp, color = aligned_temp), size=1.5) +
       geom_text(data=bands, aes(x=(x0+x1)/2, y=mn, label=name), 
                 hjust=.5, nudge_y=-8, lineheight=.7, size=3) +
       scale_color_manual(values=c("red", "forestgreen"), drop=F)  +
