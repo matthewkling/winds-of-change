@@ -25,4 +25,4 @@ m <- stack(mm) %>% mean()
 h <- raster("F:/chelsa/bio19/CHELSA_bio10_1.tif")
 m <- mask(m, h)
 
-clim <- stack(h, m) %>% "/"(10) %>% writeRaster("data/chelsa/tmean_1km.tif")
+clim <- stack(h, m) %>% "/"(10) %>% writeRaster("data/chelsa/tmean_1km.tif", overwrite=T)
