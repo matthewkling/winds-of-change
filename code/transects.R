@@ -289,7 +289,60 @@ map <- ggplot() +
 #ggsave("figures/transects/map.png", p, width=6, height=3, units="in")
 
 
-pc <- arrangeGrob(p, map, ncol=1, heights=c(6, 4))
+
+
+
+
+
+
+
+
+
+
+### latitudinal patterns in meridional winds ###
+
+modir <- "data/cfsr_monthly"
+mf <- list.files(modir, full.names=T, recursive=T)
+
+v <- mf[grepl("_v", mf)] %>% stack() %>% mean() %>% rotate() %>% stack(land)
+v <- mf[grepl("tmp2m", mf)][1:24] %>% stack() %>% mean() %>% rotate() %>% stack(v) %>%
+      rasterToPoints() %>% as.data.frame() %>%
+      rename(temp = layer.1,
+             v = layer.2)
+
+v <- v %>%
+      mutate(latitude = abs(y),
+             polarity = ifelse(y>0, v, -v),
+             land = ifelse(is.na(land), "water", "land"))
+
+vs <- v %>%
+      bind_rows(mutate(v, land="all")) %>%
+      mutate(lat = plyr::round_any(y, 5)) %>%
+      group_by(land, lat) %>%
+      summarize(v = mean(v),
+                temp =  mean(temp)) %>%
+      mutate(aligned = sign(lat) == sign(v))
+
+xb <- seq(-90, 90, 30)
+
+latitude <- ggplot(vs %>% filter(land=="land")) +
+      geom_vline(xintercept=xb) +
+      geom_ribbon(aes(lat, ymin=temp, ymax=30), 
+                  stat="identity", fill="gray90") +
+      geom_segment(aes(x=lat, xend=lat+sign(v)*10, y=temp, yend=temp,
+                       color = aligned),
+                   arrow = arw) +
+      geom_point(aes(x=lat, y=temp, color = aligned), size=2) +
+      scale_color_manual(values=c("red", "forestgreen"), drop=F)  +
+      scale_x_continuous(breaks=xb, limits=c(-90, 90), expand=c(0,0)) +
+      theme_minimal() +
+      theme(legend.position="none") +
+      scale_y_reverse() +
+      labs(y = "temperature (°C; note flipped scale)", 
+           x = "latitude") +
+      coord_flip()
+
+
+pc <- arrangeGrob(map, latitude, nrow=1, widths=c(2, 1))
+pc <- arrangeGrob(p, pc, ncol=1, heights=c(6, 4))
 ggsave("figures/transects/transects.png", pc, width=8, height=10, units="in")
-
-
