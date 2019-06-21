@@ -205,17 +205,21 @@ transect_plot <- function(transect = NULL, n=25){
 
 ##################################
 
-australia <- transect_plot(australia$transect)
-greenland <- transect_plot(greenland$transect)
-rockies <- transect_plot(rockies$transect)
-cali <- transect_plot(cali$transect)
-russia <- transect_plot(russia$transect)
-sahara <- transect_plot(sahara$transect)
+if(F){
+      australia <- transect_plot(d$australia$transect)
+      greenland <- transect_plot(d$greenland$transect)
+      rockies <- transect_plot(d$rockies$transect)
+      cali <- transect_plot(d$cali$transect)
+      russia <- transect_plot(d$russia$transect)
+      sahara <- transect_plot(d$sahara$transect)
+      
+      d <- list(rockies, cali, greenland, 
+                australia, russia, sahara)
+      names(d) <- c("rockies", "cali", "greenland",
+                    "australia", "russia", "sahara")
+      saveRDS(d, "data/transect_data.rds")
+}
 
-d <- list(rockies, cali, greenland, 
-          australia, russia, sahara)
-
-saveRDS(d, "data/transect_data.rds")
 d <- readRDS("data/transect_data.rds")
 
 labels <- c("Transverse mountain wind", "(California)", "Katabatic wind",
@@ -232,7 +236,7 @@ d <- d %>%
       mutate(i = as.integer(id),
              idi = paste0(i, ": ", id))
 
-ynugde <- 0
+ynudge <- 0
 arw <- arrow(type="closed", angle=15, length = unit(0.05, "inches"))
 p <- ggplot(d) +
       facet_wrap(~idi, scales="free") +
@@ -342,7 +346,7 @@ latitude <- ggplot(vs %>% filter(land=="land")) +
                 alpha=.15) +
       geom_ribbon(aes(lat, ymin=temp, ymax=mx), 
                   stat="identity", fill="gray90") +
-      geom_vline(xintercept=xb, color="white", size=2) +
+      geom_vline(xintercept=xb, color="white", size=1) +
       geom_line(aes(lat, temp)) +
       geom_segment(aes(x=lat, xend=xend, y=temp, yend=temp,
                        color = aligned_temp),
@@ -362,7 +366,8 @@ latitude <- ggplot(vs %>% filter(land=="land")) +
            x = "latitude") +
       coord_flip()
 
-pc <- arrangeGrob(map, latitude, nrow=1, widths=c(2, 1))
+pc <- arrangeGrob(map, latitude, nrow=1, widths=c(1.5, 1))
 pc <- arrangeGrob(pc, p, ncol=1, heights=c(1, 4/3))
 ggsave("figures/transects/transects.png", pc, width=9, height=7, units="in")
+ggsave("figures/manuscript/fig_2.png", pc, width=9, height=7, units="in")
 
