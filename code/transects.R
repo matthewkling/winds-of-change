@@ -218,8 +218,8 @@ d <- list(rockies, cali, greenland,
 saveRDS(d, "data/transect_data.rds")
 d <- readRDS("data/transect_data.rds")
 
-labels <- c("Mountain range (American Rockies)", "(California)", "Ice cap (Greenland)",
-            "Desert (Australian Outback)", "Boreal plain (Russia)", "Thermal low (West Africa)")
+labels <- c("Transverse mountain wind", "(California)", "Katabatic wind",
+            "Cross-desert wind", "Southwesterly", "Thermal low")
 for(i in 1:length(d)) d[[i]]$data$id <- labels[i]
 
 d <- lapply(d, function(x) x$data) %>%
@@ -230,7 +230,7 @@ d <- d %>%
       group_by(id) %>%
       mutate(ymax = max(clim0) + .1 * diff(range(clim0, na.rm=T))) %>%
       mutate(i = as.integer(id),
-             idi = paste0("[", i, "] ", id))
+             idi = paste0(i, ": ", id))
 
 ynugde <- 0
 arw <- arrow(type="closed", angle=15, length = unit(0.05, "inches"))
@@ -253,7 +253,8 @@ p <- ggplot(d) +
       #          label=c("climate tracking", "prevailing wind"), 
       #          color=c("black", "dodgerblue")) +
       theme_minimal() +
-      theme(legend.position="none") +
+      theme(legend.position="none",
+            strip.text=element_text(size=12)) +
       scale_y_reverse() +
       labs(y = "temperature (°C; note flipped scale)", 
            x = "distance along transect (km)")
@@ -276,25 +277,24 @@ map <- ggplot() +
       geom_path(data=d, aes(x, y, group=id), color="black", size=.35,
                 arrow=arrow(type="closed", angle=20, length=unit(.05, "in"))) +
       geom_point(data=dp, aes(x, y), color="black") +
-      geom_text(data=dp, aes(x, y-5, label=i), color="black", size=4) +
+      geom_text(data=dp, aes(x, y-7, label=i), color="black", size=4) +
       # scale_fill_gradientn(colors=c("gray97", "azure", "cyan", "dodgerblue", "blue",
       #                               "purple", "red", "orange", "yellow")) +
       scale_fill_gradientn(colors=c("black", "black", "black", "darkmagenta", "#6b49ff", 
                                     "dodgerblue", "turquoise", "#48c13f", 
                                     "gold", "red", "#660000")) +
-      theme_void() +
-      theme(legend.position="none") +
+      #theme_void() +
+      theme(legend.position="none",
+            axis.title.y=element_blank(),
+            axis.title.x=element_text(color="white"), # all this whiteness makes it align with latitude plot
+            axis.text=element_text(color="white"),
+            axis.ticks=element_line(color="white"),
+            panel.grid.major.x=element_blank(), panel.grid.minor.x=element_blank(),
+            panel.grid.minor.y=element_blank(), panel.grid.major.y=element_line(size=1),
+            panel.background = element_rect(fill="gray90")) +
       scale_x_continuous(expand=c(0,0)) +
-      scale_y_continuous(expand=c(0,0), limits=c(-90, 90))
+      scale_y_continuous(expand=c(0,0), limits=c(-90, 90), breaks=xb)
 #ggsave("figures/transects/map.png", p, width=6, height=3, units="in")
-
-
-
-
-
-
-
-
 
 
 
@@ -308,9 +308,7 @@ v <- mf[grepl("_v", mf)] %>% stack() %>% mean() %>% rotate() %>% stack(land)
 v <- mf[grepl("tmp2m", mf)][1:24] %>% stack() %>% mean() %>% rotate() %>% stack(v) %>%
       rasterToPoints() %>% as.data.frame() %>%
       rename(temp = layer.1,
-             v = layer.2)
-
-v <- v %>%
+             v = layer.2) %>%
       mutate(latitude = abs(y),
              polarity = ifelse(y>0, v, -v),
              land = ifelse(is.na(land), "water", "land"))
@@ -321,28 +319,50 @@ vs <- v %>%
       group_by(land, lat) %>%
       summarize(v = mean(v),
                 temp =  mean(temp)) %>%
-      mutate(aligned = sign(lat) == sign(v))
+      mutate(aligned_lat = sign(lat) == sign(v),
+            dtemp = lead(temp) - lag(temp),
+            aligned_temp = sign(v) != sign(dtemp),
+            aligned_temp = ifelse(is.na(aligned_temp), aligned_lat, aligned_temp),
+            
+            xend = lat+sign(v)*15,
+            xend = ifelse(xend < -90, -90, xend),
+            xend = ifelse(xend > 90, 90, xend)  )
 
 xb <- seq(-90, 90, 30)
 
+bands <- data.frame(x0 = xb[1:6], x1 = xb[2:7],
+                    name = c("Polar\ncell", "Ferrel\ncell", "Hadley\ncell")[c(1:3,3:1)],
+                    winds = c("e", "p", "e", "e", "p", "e"))
+
+
+mn <- -55
+mx <- 30
 latitude <- ggplot(vs %>% filter(land=="land")) +
-      geom_vline(xintercept=xb) +
-      geom_ribbon(aes(lat, ymin=temp, ymax=30), 
+      geom_rect(data=bands, aes(xmin=x0, xmax=x1, ymin=mn, ymax=mx, fill=winds),
+                alpha=.15) +
+      geom_ribbon(aes(lat, ymin=temp, ymax=mx), 
                   stat="identity", fill="gray90") +
-      geom_segment(aes(x=lat, xend=lat+sign(v)*10, y=temp, yend=temp,
-                       color = aligned),
-                   arrow = arw) +
-      geom_point(aes(x=lat, y=temp, color = aligned), size=2) +
+      geom_vline(xintercept=xb, color="white", size=2) +
+      geom_line(aes(lat, temp)) +
+      geom_segment(aes(x=lat, xend=xend, y=temp, yend=temp,
+                       color = aligned_temp),
+                   arrow = arw, size=.25) +
+      geom_point(aes(x=lat, y=temp, color = aligned_temp), size=2) +
+      geom_text(data=bands, aes(x=(x0+x1)/2, y=mn, label=name), 
+                hjust=.5, nudge_y=-8, lineheight=.7, size=3) +
       scale_color_manual(values=c("red", "forestgreen"), drop=F)  +
-      scale_x_continuous(breaks=xb, limits=c(-90, 90), expand=c(0,0)) +
+      scale_fill_manual(values=c("red", "forestgreen"), drop=F)  +
+      scale_x_continuous(breaks=xb, limits=c(-90, 90), expand=c(0,0),
+                         position="top") +
       theme_minimal() +
-      theme(legend.position="none") +
-      scale_y_reverse() +
+      theme(legend.position="none",
+            panel.grid=element_blank()) +
+      scale_y_reverse(limits=c(NA, mn), expand=c(0,0)) +
       labs(y = "temperature (°C; note flipped scale)", 
            x = "latitude") +
       coord_flip()
 
-
 pc <- arrangeGrob(map, latitude, nrow=1, widths=c(2, 1))
-pc <- arrangeGrob(p, pc, ncol=1, heights=c(6, 4))
-ggsave("figures/transects/transects.png", pc, width=8, height=10, units="in")
+pc <- arrangeGrob(pc, p, ncol=1, heights=c(1, 4/3))
+ggsave("figures/transects/transects.png", pc, width=9, height=7, units="in")
+
