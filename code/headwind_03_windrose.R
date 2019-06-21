@@ -99,15 +99,22 @@ legend <- ggplot(s, aes(total, directionality)) +
       theme_minimal() +
       scale_x_log10() +
       theme(text=element_text(size = 25)) +
-      labs(x = "mean wind force")
+      labs(x = "mean wind force (m3/s)")
 
 png("figures/tailwinds/speed_isotropy_direction.png", width=2000, height=1000)
 plot(map)
 plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
 dev.off()
 
+png("figures/manuscript/fig_1.png", width=2000, height=1000)
+plot(map)
+plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
+dev.off()
 
 
+
+
+### temperature and wind direction ###
 
 
 climate <- list.files("data/cfsr_monthly/tmp2m", full.names=T)[1:24] %>%
@@ -136,10 +143,10 @@ plot(map)
 dev.off()
 
 
-# higher definition version
+### higher definition version
 
 
-### prevailing direction data
+# prevailing direction data
 agg <- 3
 modir <- "data/cfsr_monthly"
 mf <- list.files(modir, full.names=T, recursive=T)
@@ -241,7 +248,7 @@ vs <- v %>%
                 v3 = mean(polarity^3))
 
 ymn <- -5
-
+xb <- seq(-90, 90, 30)
 p <- ggplot(vs, aes(lat, ymin=0, ymax=v, y=v, color=land, fill=land)) +
       geom_ribbon(alpha=.1, position="identity") +
       geom_line() +
