@@ -6,6 +6,7 @@ library(ineq)
 library(grid)
 library(rNOMADS)
 library(colormap)
+library(windscape)
 
 # load data
 
@@ -27,7 +28,9 @@ windrose <- stack("data/roses_force/cfsr_climatology/roses_cfsr_1980s.tif") %>%
 # summarize
 
 total <- sum(windrose)
-directionality <- calc(windrose, Gini) # Gini: 1 = directionality, 0 = equality
+#dir2 <- calc(windrose, Gini) # Gini: 1 = directionality, 0 = equality
+directionality <- calc(windrose, function(x) anisotropy(seq(0, 315, 45), x))
+#pairs(stack(directionality, dir2))
 
 
 s <- stack(total, directionality) %>%
@@ -69,12 +72,9 @@ aland <- wm %>% mask(aggregate(land, agg)) %>%
 
 ## plot
 
-# s$color <- colors2d(dplyr::select(s, total, directionality),
-#                     c("gold", "forestgreen", "darkblue", "red"),
-#                     xtrans="rank", ytrans="rank")
 
 s$color <- colors2d(dplyr::select(s, total, directionality),
-                    c("yellow", "green", "dodgerblue", "red"),
+                    c("magenta", "cyan", "darkblue", "darkred"),
                     xtrans="rank", ytrans="rank")
 
 ocean <- land %>%
@@ -87,7 +87,7 @@ map <- ggplot() +
       geom_raster(data=s, aes(x, y), fill = s$color) +
       geom_spoke(data=aland, aes(x, y, angle=radians, radius=.1),
                  arrow = arrow(type="open", angle=10, length=unit(.2, "in")),
-                 color = "black", size = .5) +
+                 color = "white", size = .6) +
       #geom_raster(data=ocean, aes(x, y), fill = "white") +
       theme_void() +
       coord_cartesian(xlim=c(-180, 180),
@@ -184,6 +184,26 @@ map <- ggplot() +
 png("figures/tailwinds/temperature_direction_hd.png", width=3000, height=1500)
 plot(map)
 dev.off()
+
+
+
+### latitudinal patterns in wind total and directionality ###
+
+ss <- s %>%
+      mutate(lat = plyr::round_any(y, 5)) %>%
+      group_by(lat) %>%
+      summarize(total=log10(mean(total)),
+                directionality=mean(directionality)) %>%
+      gather(stat, value, total, directionality)
+
+p <- ggplot(ss, aes(lat, value, group=stat)) +
+      geom_vline(xintercept=seq(-90, 90, 30)) +
+      geom_line(color="darkred", size=1) +
+      facet_grid(.~stat, scales="free") +
+      theme_minimal() +
+      coord_flip()
+ggsave("figures/tailwinds/latitude.png", p, width=8, height=6, units="in")
+
 
 
 
