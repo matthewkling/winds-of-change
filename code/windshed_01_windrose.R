@@ -51,9 +51,8 @@ intdir <- "data/roses_force/cfsr_monthly"
 f <- f[grepl("gdas\\.20", f)]
 map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, weighting="force")
 
-# 2005 currently messed up
-ny <- 5
-f <- list.files(intdir, full.names=T)[1:(72*ny)] %>% #427
+ny <- 10
+f <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
       lapply(stack) %>%
       Reduce("+", .) %>%
       "/"(24 * 365 * ny) %>%
