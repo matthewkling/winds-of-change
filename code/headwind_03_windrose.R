@@ -7,6 +7,7 @@ library(grid)
 library(rNOMADS)
 library(colormap)
 library(windscape)
+library(geosphere)
 
 # load data
 
@@ -20,25 +21,34 @@ land <- raster("f:/cfsr/land.tif") %>%
       rotate()# %>% 
       #to_equal_area(method="ngb")
 
-windrose <- stack("data/roses_force/cfsr_climatology/roses_cfsr_1980s.tif") %>%
+windrose <- stack("data/roses_force/cfsr_climatology/roses_cfsr_2000s.tif") %>%
       rotate() %>%
       #to_equal_area() %>%
       mask(land)
 
 # summarize
 
-total <- sum(windrose)
+strength <- sum(windrose)
+
+direct <- calc(windrose, function(x) circ_sd(windrose_bearings(), x))
+direction <- direct$bearing
+
+directionality <- calc(windrose, function(x) anisotropy(windrose_bearings(), x))
+writeRaster(directionality, "data/geographic/processed/directionality.tif")
+
 #dir2 <- calc(windrose, Gini) # Gini: 1 = directionality, 0 = equality
-directionality <- calc(windrose, function(x) anisotropy(seq(0, 315, 45), x))
-#pairs(stack(directionality, dir2))
+#sd <- direct$iso
+#pairs(stack(directionality, dir2, sd))
 
+elev <- raster("data/geographic/processed/elevation.tif")
+coast <- raster("data/geographic/processed/coastal_distance.tif")
 
-s <- stack(total, directionality) %>%
+s <- stack(strength, direction, directionality, elev, coast)
+names(s) <- c("strength", "direction", "directionality", "elevation", "coast")
+s <- s %>%
       rasterToPoints() %>%
       as.data.frame() %>%
-      rename(total = layer.1,
-             directionality = layer.2) %>%
-      filter(is.finite(total), is.finite(directionality))
+      filter(is.finite(strength), is.finite(directionality))
 
 
 
@@ -62,18 +72,18 @@ a <- wm %>%
       rasterToPoints() %>%
       as.data.frame() %>%
       rename(a = layer.2, m = layer.1) %>%
-      mutate(radians = (90 - a) / 190 * pi)
+      mutate(radians = (90 - a) / 180 * pi)
 aland <- wm %>% mask(aggregate(land, agg)) %>%
       rasterToPoints() %>%
       as.data.frame() %>%
       rename(a = layer.2, m = layer.1) %>%
-      mutate(radians = (90 - a) / 190 * pi)
+      mutate(radians = (90 - a) / 180 * pi)
 
 
 ## plot
 
 
-s$color <- colors2d(dplyr::select(s, total, directionality),
+s$color <- colors2d(dplyr::select(s, strength, directionality),
                     c("magenta", "cyan", "darkblue", "darkred"),
                     xtrans="rank", ytrans="rank")
 
@@ -94,12 +104,13 @@ map <- ggplot() +
                       ylim=c(-90, 90),
                       expand = 0)
 
-legend <- ggplot(s, aes(total, directionality)) +
+legend <- ggplot(s, aes(strength, directionality)) +
       geom_point(color=s$color, size=.1) +
       theme_minimal() +
       scale_x_log10() +
+      ylim(0:1) +
       theme(text=element_text(size = 25)) +
-      labs(x = "mean wind force (m3/s)")
+      labs(x = "strength (m3/s)")
 
 png("figures/tailwinds/speed_isotropy_direction.png", width=2000, height=1000)
 plot(map)
@@ -188,13 +199,48 @@ dev.off()
 
 
 ### latitudinal patterns in wind total and directionality ###
-
+library(scales)
 ss <- s %>%
-      mutate(lat = plyr::round_any(y, 5)) %>%
-      group_by(lat) %>%
-      summarize(total=log10(mean(total)),
-                directionality=mean(directionality)) %>%
-      gather(stat, value, total, directionality)
+      mutate(y = plyr::round_any(y, 5),
+             x = plyr::round_any(x, 10),
+             elevation = plyr::round_any(elevation, 500),
+             coast = plyr::round_any(coast, 250),
+             
+             u = sin(direction / 180 * pi),
+             v = cos(direction / 180 * pi),
+             
+             latitude = y) %>%
+      gather(axis, coord, latitude, elevation, coast) %>%
+      group_by(axis, coord) %>%
+      summarize(strength=log10(mean(strength)),
+                directionality=mean(directionality),
+                direction=circ_sd(direction)["bearing"],
+                u = mean(u),
+                v = mean(v)) %>%
+      gather(stat, value, strength, directionality,  u, v)
+
+p <- ggplot(ss, aes(coord, value)) +
+      facet_grid(axis ~ stat, scales="free") +
+      geom_line() +
+      coord_flip()
+ggsave("figures/tailwinds/axes_metrics.png", p, width=8, height=6, units="in")
+
+
+sss <- ss %>% filter(axis=="latitude") %>%
+      spread(stat, value) %>%
+      mutate(color = colors2d(cbind(.$strength, .$directionality),
+                      c("magenta", "cyan", "darkblue", "darkred"),
+                      xtrans="rank", ytrans="rank"))%>%
+      mutate(radians = (90 - direction) / 180 * pi)
+sss %>% ggplot(aes(0, coord)) +
+      #geom_point(color=sss$color, size=6) +
+      geom_spoke(aes(angle=radians), ######## fixme
+                 radius=5,
+                 color=sss$color, size=.5, 
+                 arrow=arrow(type="closed", angle=15, length=unit(.25, "in"))) +
+      coord_fixed() +
+      theme_void() +
+      xlim(-50, 50)
 
 p <- ggplot(ss, aes(lat, value, group=stat)) +
       geom_vline(xintercept=seq(-90, 90, 30)) +
