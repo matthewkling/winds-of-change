@@ -342,3 +342,62 @@ p <- ggplot(vs, aes(lat, ymin=0, ymax=v, y=v, color=land, fill=land)) +
       ylim(ymn, NA)
 ggsave("figures/tailwinds/meridional_bins_polar.png", p, width=8, height=8, units="in")
 
+
+
+
+
+
+
+
+
+
+################ some experiments with modeling wind ~ geo ###############
+
+library(mgcv)
+
+md <- s %>%
+      mutate(strength = scale(log10(strength)),
+             elevation = scale(elevation),
+             continentality = scale(log10(coast)),
+             polarity = abs(y))
+
+m <- gam(strength ~ s(y), data=md)
+md$strength_resid <- scale(m$residuals)
+
+m <- gam(directionality ~ s(y), data=md)
+md$directionality_resid <- scale(m$residuals)
+
+
+lm(strength_resid ~ elevation + continentality + elevation*continentality, data=md) %>% summary()
+lm(directionality_resid ~ elevation + continentality, data=md) %>% summary()
+
+m <- gam(strength_resid ~ s(elevation) + s(continentality), data=md)
+
+mdf <- filter(md, polarity < 15)
+lm(strength_resid ~ elevation + coast, data=mdf) %>% summary()
+lm(directionality_resid ~ elevation + coast, data=mdf) %>% summary()
+
+mdf <- filter(md, polarity > 30, polarity < 60)
+lm(strength_resid ~ elevation + coast, data=mdf) %>% summary()
+lm(directionality_resid ~ elevation + coast, data=mdf) %>% summary()
+
+mdf <- filter(md, polarity > 60)
+lm(strength_resid ~ elevation + coast, data=mdf) %>% summary()
+lm(directionality_resid ~ elevation + coast, data=mdf) %>% summary()
+
+
+md <- s %>%
+      mutate(strength = scale(log10(strength)),
+             elevation = elevation,
+             continentality = log10(coast)) %>%
+      filter(is.finite(continentality))
+
+m <- gam(strength ~ s(continentality) + s(elevation), data=md)
+vis.gam(m)
+
+m <- gam(strength ~ s(continentality) + s(elevation) + s(y), data=md)
+vis.gam(m)
+
+m <- gam(directionality ~ s(continentality) + s(elevation) + s(y), data=md)
+vis.gam(m)
+
