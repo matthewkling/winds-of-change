@@ -4,6 +4,7 @@ library(raster)
 library(tidyverse)
 library(ineq)
 library(grid)
+library(gridExtra)
 library(rNOMADS)
 library(colormap)
 library(windscape)
@@ -19,26 +20,32 @@ to_equal_area <- function(r, ...){
 
 land <- raster("f:/cfsr/land.tif") %>% 
       rotate()# %>% 
-      #to_equal_area(method="ngb")
+#to_equal_area(method="ngb")
 
-windrose <- stack("data/roses_force/cfsr_climatology/roses_cfsr_2000s.tif") %>%
-      rotate() %>%
-      #to_equal_area() %>%
-      mask(land)
-
-# summarize
-
-strength <- sum(windrose)
-
-direct <- calc(windrose, function(x) circ_sd(windrose_bearings(), x))
-direction <- direct$bearing
-
-directionality <- calc(windrose, function(x) anisotropy(windrose_bearings(), x))
-writeRaster(directionality, "data/geographic/processed/directionality.tif")
-
-#dir2 <- calc(windrose, Gini) # Gini: 1 = directionality, 0 = equality
-#sd <- direct$iso
-#pairs(stack(directionality, dir2, sd))
+if(F){
+      windrose <- stack("data/roses_force/cfsr_climatology/roses_cfsr_2000s.tif") %>%
+            rotate() %>%
+            #to_equal_area() %>%
+            mask(land)
+      
+      # summarize
+      strength <- sum(windrose
+      writeRaster(strength, "data/geographic/processed/strength.tif")
+      
+      direct <- calc(windrose, function(x) circ_sd(windrose_bearings(), x))
+      direction <- direct$bearing
+      writeRaster(direction, "data/geographic/processed/direction.tif")
+      
+      directionality <- calc(windrose, function(x) anisotropy(windrose_bearings(), x),
+                             filename="data/geographic/processed/directionality.tif")
+      
+      #dir2 <- calc(windrose, Gini) # Gini: 1 = directionality, 0 = equality
+      #sd <- direct$iso
+      #pairs(stack(directionality, dir2, sd))
+}
+strength <- raster("data/geographic/processed/strength.tif")
+direction <- raster("data/geographic/processed/direction.tif")
+directionality <- raster("data/geographic/processed/directionality.tif")
 
 elev <- raster("data/geographic/processed/elevation.tif")
 coast <- raster("data/geographic/processed/coastal_distance.tif")
@@ -53,6 +60,7 @@ s <- s %>%
 
 
 ### prevailing direction data
+stop("fixme -- replace this with direction from above, which is force-weigthed")
 agg <- 10
 modir <- "data/cfsr_monthly"
 mf <- list.files(modir, full.names=T, recursive=T)
@@ -93,11 +101,13 @@ ocean <- land %>%
       rasterToPoints() %>%
       as.data.frame()
 
+cf <- readRDS("figures/tailwinds/regime_cartoon_plot.rds")
+
 map <- ggplot() +
       geom_raster(data=s, aes(x, y), fill = s$color) +
       geom_spoke(data=aland, aes(x, y, angle=radians, radius=.1),
-                 arrow = arrow(type="open", angle=10, length=unit(.2, "in")),
-                 color = "white", size = .6) +
+                 arrow = arrow(type="open", angle=10, length=unit(.1, "in")),
+                 color = "white", size = .5) +
       #geom_raster(data=ocean, aes(x, y), fill = "white") +
       theme_void() +
       coord_cartesian(xlim=c(-180, 180),
@@ -109,19 +119,25 @@ legend <- ggplot(s, aes(strength, directionality)) +
       theme_minimal() +
       scale_x_log10() +
       ylim(0:1) +
-      theme(text=element_text(size = 25)) +
+      #theme(text=element_text(size = 25)) +
       labs(x = "strength (m3/s)")
 
-png("figures/tailwinds/speed_isotropy_direction.png", width=2000, height=1000)
-plot(map)
-plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
-dev.off()
 
-png("figures/manuscript/fig_1.png", width=2000, height=1000)
-plot(map)
-plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
-dev.off()
+p <- arrangeGrob(cf, legend, nrow=1, widths=c(3, 1))
+p <- arrangeGrob(p, map, ncol=1, heights=c(1, 2))
+ggsave("figures/manuscript/fig_1.png", p, width=12, height=9, units="in")
+ggsave("figures/tailwinds/speed_isotropy_direction.png", p, width=12, height=9, units="in")
 
+
+# png("figures/tailwinds/speed_isotropy_direction.png", width=2000, height=1000)
+# plot(p)
+# plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
+# dev.off()
+# 
+# png("figures/manuscript/fig_1.png", width=2000, height=1750)
+# plot(p)
+# plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
+# dev.off()
 
 
 
@@ -229,8 +245,8 @@ ggsave("figures/tailwinds/axes_metrics.png", p, width=8, height=6, units="in")
 sss <- ss %>% filter(axis=="latitude") %>%
       spread(stat, value) %>%
       mutate(color = colors2d(cbind(.$strength, .$directionality),
-                      c("magenta", "cyan", "darkblue", "darkred"),
-                      xtrans="rank", ytrans="rank"))%>%
+                              c("magenta", "cyan", "darkblue", "darkred"),
+                              xtrans="rank", ytrans="rank"))%>%
       mutate(radians = (90 - direction) / 180 * pi)
 sss %>% ggplot(aes(0, coord)) +
       #geom_point(color=sss$color, size=6) +
@@ -268,7 +284,7 @@ p <- ggplot(v, aes(latitude, polarity, color=land)) +
       geom_vline(xintercept=c(0, 30, 60, 90)) +
       geom_smooth(se=F) +
       annotate(geom="text", x=c(15, 45, 75), y=1,
-              label=c("Hadley cell", "Ferrel cell", "Polar cell")) +
+               label=c("Hadley cell", "Ferrel cell", "Polar cell")) +
       scale_x_continuous(limits=c(0,90), breaks=c(0, 30, 60, 90), expand=c(0,0)) +
       theme_minimal() +
       theme(legend.position=c(.5, .1)) +
