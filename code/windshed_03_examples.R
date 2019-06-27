@@ -35,6 +35,8 @@ e <- f %>%
       sample_n(48) %>%
       mutate(id = 1:nrow(.))
 
+cost_to_flow <- function(cost) (1/(cost)) ^ (1/3)
+
 r <- map2(e$x, e$y, possibly(woc, NULL), 
           windrose=rose, climate=climate, cost_to_flow=cost_to_flow, radius=500,
           output="rasters")
@@ -42,6 +44,8 @@ r <- map2(e$x, e$y, possibly(woc, NULL),
 d <- r %>% lapply(rasterToPoints) %>% lapply(as.data.frame)
 for(i in 1:length(d)) d[[i]]$id <- i
 d <- bind_rows(d)
+
+d <- filter(d, is.finite(wind_fwd))
 
 d$color <- colors2d(select(d, clim_fwd, wind_fwd),
                     c("green", "gold", "black", "cyan"))
