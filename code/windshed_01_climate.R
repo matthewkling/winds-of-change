@@ -61,6 +61,7 @@ writeRaster(u, "data/geographic/processed/elevation.tif")
 
 
 ####### coastal distance ########
+# data from https://oceancolor.gsfc.nasa.gov/docs/distfromcoast/
 r <- raster("data/geographic/raw/GMT_intermediate_coast_distance_01d/GMT_intermediate_coast_distance_01d.tif") 
 p <- r %>% reclassify(c(0, Inf, NA)) %>%
       aggregate(10) %>% rasterToPoints() %>% as.data.frame()
