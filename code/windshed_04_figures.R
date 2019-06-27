@@ -130,25 +130,53 @@ dd <- d %>%
       mutate(color = colors2d(cbind(rank(.$clim), rank(.$windfill)),
                               c("forestgreen", "yellow", "red", "black")))
 
+txt <- data.frame(direction = c("forward", "reverse"),
+                  text = c("forward\n(emigration)", "reverse\n(immigration)"),
+                  x = min(dd$x), y=min(dd$y) + .3 *(diff(range(dd$y))))
+
 map <- ggplot(dd, aes(x, y)) +
       facet_grid(direction ~ .) +
       geom_raster(fill=dd$color) +
+      geom_text(data=txt, aes(x, y, label=text), 
+                hjust=0, size=6, lineheight=.75) +
       theme_void() +
-      theme(strip.text=element_text(size=50, angle=-90))
+      #theme(strip.text=element_text(size=50, angle=-90)) +
+      theme(strip.text=element_blank())
 legend <- ggplot(dd, aes(clim, windfill)) +
-      facet_grid(direction ~ .) +
       geom_point(color=dd$color, size=.2) +
       scale_y_log10(breaks=c(.001, .003, .01, .03, .1, .3, 1)) +
       xlim(0, .75) +
       theme_minimal() +
-      theme(text=element_text(size = 45),
+      theme(#text=element_text(size = 45),
             strip.text=element_blank()) +
-      labs(x = "analogous area",
+      labs(x = "area of analog climate",
            y = "proportion windfilling")
-p <- arrangeGrob(legend, map, ncol=2, widths=c(1, 2))
-png("figures/windsheds/windfill_clim.png", width=3000, height=2000)
-grid.draw(p)
-dev.off()
+
+scat <- d %>%
+      select(-moment, -stat) %>%
+      filter(property %in% c("clim", "wind", "overlap")) %>%
+      mutate(property = factor(property, levels=c("clim", "wind", "overlap"),
+                               labels=c("area of\nanalog climate",
+                                        "area of\naccessible windshed",
+                                        "area of overlap\n(analog and accessible)"))) %>%
+      spread(direction, value) %>%
+      sample_n(30000) %>%
+      ggplot(aes(forward, reverse)) +
+      facet_wrap(~property, ncol=1, scales="free") +
+      geom_point(size=.25, alpha=.05) +
+      #coord_fixed() +
+      theme_minimal() +
+      labs(x="forward (emigration)",
+           y="reverse (immigration)")
+
+p <- arrangeGrob(legend, scat, ncol=1, heights=c(1, 3))
+p <- arrangeGrob(p, map, ncol=2, widths=c(1, 4))
+ggsave("figures/manuscript/fig_4.png", p, width=10, height=8, units="in")
+ggsave("figures/windsheds/windfill_clim.png", p, width=10, height=8, units="in")
+
+# png("figures/windsheds/windfill_clim.png", width=3000, height=2000)
+# grid.draw(p)
+# dev.off()
 
 
 
