@@ -170,7 +170,7 @@ scat <- d %>%
            y="reverse (immigration)")
 
 p <- arrangeGrob(legend, scat, ncol=1, heights=c(1, 3))
-p <- arrangeGrob(p, map, ncol=2, widths=c(1, 4))
+p <- arrangeGrob(map, p, ncol=2, widths=c(4, 1))
 ggsave("figures/manuscript/fig_4.png", p, width=10, height=8, units="in")
 ggsave("figures/windsheds/windfill_clim.png", p, width=10, height=8, units="in")
 
