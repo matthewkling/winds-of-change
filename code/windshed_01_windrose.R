@@ -5,7 +5,7 @@ library(tidyverse)
 library(raster)
 
 
-cfsr_rose <- function(infile, outdir, ncores, weighting){
+cfsr_rose <- function(infile, outdir, ncores, p){
       message(infile)
       
       # file admin
@@ -26,7 +26,7 @@ cfsr_rose <- function(infile, outdir, ncores, weighting){
             brick() %>%
             subset(process) %>%
             windrose_rasters(ncores=ncores, 
-                             weighting=weighting,
+                             p=p,
                              outfile=outfile)
       return("success")
 }
@@ -35,24 +35,39 @@ cfsr_rose <- function(infile, outdir, ncores, weighting){
 # hourly input data
 f <- list.files("f:/CFSR/wnd10m", full.names=T)
 f <- f[!grepl("inv", f)]
+f <- f[grepl("gdas\\.20", f)]
+
+
 
 
 # velocity
 intdir <- "data/roses_velocity/cfsr_monthly"
-map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, weighting="velocity")
-f <- list.files(intdir, full.names=T) %>%
+map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=1)
+ny <- 10
+s <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
       lapply(stack) %>%
       Reduce("+", .) %>%
-      writeRaster("data/roses_velocity/cfsr_climatology/roses_cfsr_1980s.tif", overwrite=T)
+      "/"(24 * 365 * ny) %>%
+      writeRaster("data/roses_velocity/cfsr_climatology/roses_cfsr_2000s.tif", overwrite=T)
+
+
+# drag
+intdir <- "data/roses_drag/cfsr_monthly"
+map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=2)
+ny <- 10
+s <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
+      lapply(stack) %>%
+      Reduce("+", .) %>%
+      "/"(24 * 365 * ny) %>%
+      writeRaster("data/roses_drag/cfsr_climatology/roses_cfsr_2000s.tif", overwrite=T)
+
 
 
 # force
 intdir <- "data/roses_force/cfsr_monthly"
-f <- f[grepl("gdas\\.20", f)]
-map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, weighting="force")
-
+map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=3)
 ny <- 10
-f <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
+s <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
       lapply(stack) %>%
       Reduce("+", .) %>%
       "/"(24 * 365 * ny) %>%
