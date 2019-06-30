@@ -1,6 +1,6 @@
 
 
-library(windshed)
+library(windscape)
 library(tidyverse)
 library(raster)
 
