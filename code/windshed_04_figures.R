@@ -18,7 +18,7 @@ select <- dplyr::select
 #####################
 
 
-f <- read_csv("data/windshed/force_500km_v2.csv") %>%
+f <- read_csv("data/windshed/p2_500km.csv") %>%
       select(-runtime) %>%
       gather(var, value, -x, -y) %>%
       separate(var, c("property", "direction", "moment", "stat"), sep="_")
