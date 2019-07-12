@@ -144,7 +144,7 @@ map <- ggplot(dd, aes(x, y)) +
       theme(strip.text=element_blank())
 legend <- ggplot(dd, aes(clim, windfill)) +
       geom_point(color=dd$color, size=.2) +
-      scale_y_log10(breaks=c(.001, .003, .01, .03, .1, .3, 1)) +
+      #scale_y_log10(breaks=c(.001, .003, .01, .03, .1, .3, 1)) +
       xlim(0, .75) +
       theme_minimal() +
       theme(#text=element_text(size = 45),
@@ -201,7 +201,7 @@ for(drn in c("fwd", "rev")){
             select(x, y, isotropy) %>%
             left_join(d, .)
       
-      d <- d %>% mutate(color = colors2d(cbind(rank(.$isotropy), rank(.$windfill)),
+      d <- d %>% mutate(color = colors2d(cbind(log(.$isotropy), rank(.$windfill)),
                                          c("cyan", "magenta", "darkred", "darkblue")))
       
       map <- ggplot(d, aes(x, y)) +
@@ -210,7 +210,7 @@ for(drn in c("fwd", "rev")){
             theme(strip.text=element_text(size=50, angle=-90))
       legend <- ggplot(d, aes(isotropy, windfill)) +
             geom_point(color=d$color, size=.2) +
-            scale_y_log10(breaks=c(.001, .003, .01, .03, .1, .3, 1)) +
+            #scale_y_log10(breaks=c(.001, .003, .01, .03, .1, .3, 1)) +
             xlim(.25, NA) +
             theme_minimal() +
             theme(text=element_text(size = 45),

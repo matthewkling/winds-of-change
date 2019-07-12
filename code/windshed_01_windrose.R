@@ -39,6 +39,19 @@ f <- f[grepl("gdas\\.20", f)]
 
 
 
+# drag
+intdir <- "data/windrose/monthly_p2"
+map(f[1:120], possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=2)
+ny <- 10
+s <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
+      lapply(stack) %>%
+      Reduce("+", .) %>%
+      "/"(24 * 365 * ny) %>%
+      writeRaster("data/windrose_p2_2000s.tif", overwrite=T)
+
+
+
+stop("wootwoot")
 
 # velocity
 intdir <- "data/roses_velocity/cfsr_monthly"
@@ -49,17 +62,6 @@ s <- list.files(intdir, full.names=T)[1:(72*ny)] %>%
       Reduce("+", .) %>%
       "/"(24 * 365 * ny) %>%
       writeRaster("data/roses_velocity/cfsr_climatology/roses_cfsr_2000s.tif", overwrite=T)
-
-
-# drag
-intdir <- "data/roses_drag/cfsr_monthly"
-map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=2)
-ny <- 10
-s <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
-      lapply(stack) %>%
-      Reduce("+", .) %>%
-      "/"(24 * 365 * ny) %>%
-      writeRaster("data/roses_drag/cfsr_climatology/roses_cfsr_2000s.tif", overwrite=T)
 
 
 

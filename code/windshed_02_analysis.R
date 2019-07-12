@@ -48,73 +48,6 @@ geo_circle <- function(pts, width, thresh=100) {
       poly
 }
 
-
-
-
-ws_summarize2 <- function(x, # raster layer of wind flow (where positive values are more accessible)
-                          origin, # coordinates of center point (2-column matrix)
-                          latlon = T # is data already in lat-lon coordinates
-){
-      
-      # transform everything to latlong
-      p <- rasterToPoints(x)
-      p <- p[is.finite(p[,3]), ]
-      xy <- p[,1:2]
-      
-      if(!latlon){
-            xy <- as.data.frame(rbind(origin, xy))
-            coordinates(xy) <- c("x", "y")
-            crs(xy) <- crs(x)
-            latlong <- crs('+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs')
-            xy <- spTransform(xy, latlong)
-            xy <- coordinates(xy)
-            origin <- xy[1,]
-            xy <- xy[2:nrow(xy),]
-      }
-      
-      # size of windshed
-      w <- round(p[,3], 3)
-      ws_size <- mean(w)
-      
-      # distance and bearing to centroid of windshed
-      ctd <- apply(xy, 2, function(z) weighted.mean(z, w, na.rm=T)) # not geodesically ideal
-      ctd_dist <- distGeo(origin, ctd) / 1000
-      ctd_brng <- bearing(origin, ctd)
-      
-      # distance and bearing to every cell
-      dist <- distGeo(origin, xy) / 1000
-      brng <- round(bearing(origin, xy))
-      
-      # mean distance, mean bearing
-      ws_dist <- weighted.mean(dist, w, na.rm=T)
-      iso <- circ_sd(brng, w, na.rm=T)
-      ws_brng <- iso["bearing"]
-      #ws_iso <- 1 - anisotropy(brng, w) # too slow
-      ws_iso <- iso["iso"]
-      
-      # convert centroid back to origin proj
-      if(!latlon){
-            ctd <- as.data.frame(matrix(ctd, ncol=2))
-            coordinates(ctd) <- c("V1", "V2")
-            crs(ctd) <- latlong
-            ctd <- spTransform(ctd, crs(x))
-            ctd <- coordinates(ctd)
-      }
-      
-      names(ctd) <- names(ws_iso) <- names(ws_brng) <- NULL
-      c(centroid_x = ctd[1],
-        centroid_y = ctd[2],
-        centroid_distance = ctd_dist,
-        centroid_bearing = ctd_brng,
-        windshed_distance = ws_dist,
-        windshed_bearing = ws_brng,
-        windshed_isotropy = ws_iso,
-        windshed_size=ws_size)
-}
-
-
-
-
 woc <- function(x, y, windrose, climate, 
                 radius = 1000, cost_to_flow, 
                 output = "summary"){
@@ -150,6 +83,10 @@ woc <- function(x, y, windrose, climate,
       # overlap between wind and climate
       s$overlap_fwd <- s$wind_fwd * s$clim_fwd
       s$overlap_rev <- s$wind_rev * s$clim_rev
+      
+      # set water values to zero
+      s[is.na(s[])] <- 0
+      s <- mask(s, circle)
       if(output == "rasters") return(s)
       
       # summary statistics of wind and climate surfaces
@@ -165,12 +102,10 @@ woc <- function(x, y, windrose, climate,
             origin[1,1] <- origin[1,1] + shft
       }
       
-      ss <- s %>% as.list() %>% lapply(ws_summarize2, origin=origin)
+      ss <- s %>% as.list() %>% lapply(ws_summarize, origin=origin)
       for(i in 1:length(ss)) names(ss[[i]]) <- paste0(names(s)[i], "_", names(ss[[i]]))
       ss <- unlist(ss)
       
-      # total overlap across landscape 
-      # (mean rather than sum, bc landscapes differ in number of cells due to geodesy)
       if(output == "summary") return(c(x=x, y=y, ss,
                                        runtime = difftime(Sys.time(), start, units="secs")))
       stop("invalid output argument")
@@ -198,7 +133,9 @@ climate <- stack("data/geographic/processed/temperature.tif") %>% unwrap(180)
 
 # function to convert wind cost values to flow values
 #cost_to_flow <- function(cost) .5 ^ (cost * 1e8)
-cost_to_flow <- function(cost) (1/cost) ^ (1/2)
+#cost_to_flow <- function(cost) (1/cost) ^ (1/2)
+#cost_to_flow <- function(cost) log10(1/cost) + 8
+cost_to_flow <- function(cost) 1/log10(cost)
 
 # test
 coords <- c(179, 67)
