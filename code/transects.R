@@ -1,15 +1,4 @@
 
-# visualize stats across a (mountain range) transect
-
-# elevation
-# temperature
-# wind speed/direction
-
-# local, forward, reverse velocity
-# local, forward, reverse windshed
-# local alignment
-# forward, reverse windfilling
-
 
 library(windscape)
 library(raster)
@@ -23,7 +12,7 @@ land <- raster("f:/cfsr/land.tif") %>%
       rotate()
 
 # load windrose data
-rose <- stack("data/roses_velocity/cfsr_climatology/roses_cfsr_1980s.tif") %>%
+rose <- stack("data/windrose/windrose_p2_2000s.tif") %>%
       rotate()
 
 # downweight conductance over water
@@ -32,7 +21,10 @@ rose <- land %>%
       "*"(rose)
 names(rose) <- windrose_names()
 
-# mean temperature (kelvin)
+# mean temperature
+climate <- stack("data/geographic/processed/temperature.tif")
+names(climate) <- c("clim0", "clim1")
+
 climate <- list.files("data/cfsr_monthly/tmp2m", full.names=T)[1:24] %>%
       stack() %>%
       mean() %>%
@@ -40,8 +32,6 @@ climate <- list.files("data/cfsr_monthly/tmp2m", full.names=T)[1:24] %>%
       mask(land)
 climate <- stack(climate, climate + 3)
 names(climate) <- c("clim0", "clim1")
-
-
 
 
 transect_plot <- function(transect = NULL, n=25){
@@ -55,6 +45,7 @@ transect_plot <- function(transect = NULL, n=25){
             plot(climate[[1]] %>% crop(ext), 
                  col=colorRampPalette(c("gray98", "cyan", "dodgerblue", "darkorchid", 
                                         "red", "yellow"))(100))
+            
             message("Click the map twice to draw an EAST-WEST transect, then hit ESC.")
             transect <- drawLine()
       }
@@ -205,6 +196,8 @@ transect_plot <- function(transect = NULL, n=25){
 
 ##################################
 
+d <- readRDS("data/transect_data.rds")
+
 if(F){
       australia <- transect_plot(d$australia$transect)
       greenland <- transect_plot(d$greenland$transect)
@@ -217,10 +210,9 @@ if(F){
                 australia, russia, sahara)
       names(d) <- c("rockies", "cali", "greenland",
                     "australia", "russia", "sahara")
-      saveRDS(d, "data/transect_data.rds")
+      #saveRDS(d, "data/transect_data.rds")
 }
 
-d <- readRDS("data/transect_data.rds")
 
 labels <- c("Transverse mountain wind", "Sea breeze", "Katabatic wind",
             "Cross-desert wind", "Southwesterly", "Thermal low")
@@ -241,6 +233,9 @@ d <- d %>%
              ymax = max(ymax, na.rm=T),
              xend = dst + sign(uwind) * max(dst) / 50)
 
+dp <- d %>% group_by(idi) %>% arrange(dst) %>% slice(1)
+de <- d %>% group_by(idi) %>% arrange(desc(dst)) %>% slice(1)
+
 ynudge <- 0
 arw <- arrow(type="closed", angle=15, length = unit(0.1, "in"))
 p <- ggplot(d) +
@@ -253,6 +248,9 @@ p <- ggplot(d) +
                        color=aligned),
                    arrow=arw, #color="blue", 
                    size=.3) +
+      geom_line(aes(dst, ymax)) +
+      geom_point(data=dp, aes(dst, ymax)) +
+      geom_point(data=de, aes(dst, ymax), color="black", fill="white", shape=21) +
       #geom_segment(aes(x=dst, xend=dst+uclim,
       #                 y=clim0-ynudge, yend=clim0-ynudge),
       #              arrow=arw, color="black") +
@@ -272,30 +270,78 @@ p <- ggplot(d) +
 #ggsave("figures/transects/transects.png", p, width=8, height=6, units="in")
 
 
-climate <- list.files("data/cfsr_monthly/tmp2m", full.names=T)[1:24] %>%
-      stack() %>%
-      mean() %>%
-      rotate() %>%
-      mask(land) %>%
+clim <- climate[[1]] %>%
       rasterToPoints() %>%
       as.data.frame()
 
 dp <- d %>% group_by(id) %>% arrange(dst) %>% slice(1)
+de <- d %>% group_by(id) %>% arrange(desc(dst)) %>% slice(1)
+
+x0 <- -113
+y0 <- 39
+r0 <- 15
+x1 <- -130
+y1 <- -25
+r1 <- 45
+circle_sm <- swfscMisc::circle.polygon(x0, y0, r0, poly.type="cartesian") %>%
+      mapview::coords2Polygons(ID = "A")
+circle_lg <- swfscMisc::circle.polygon(x1, y1, r1, poly.type="cartesian") %>%
+      mapview::coords2Polygons(ID = "A")
+clim_circ <- climate[[1]] %>%
+      crop(circle_sm) %>% mask(circle_sm) %>%
+      rasterToPoints() %>% 
+      mutate(x=((x-x0)/r0*r1)+x1, 
+             y=((y-y0)/r0*r1)+y1)
+d_circ <- d %>%
+      filter(i %in% 1:2) %>%
+      mutate(x=((x-x0)/r0*r1)+x1, 
+             y=((y-y0)/r0*r1)+y1)
+dp_circ <- d_circ %>% group_by(id) %>% arrange(dst) %>% slice(1)
+de_circ <- d_circ %>% group_by(id) %>% arrange(desc(dst)) %>% slice(1)
+
+# parameters for segment joining the circles
+dx <- x1 - x0
+dy <- y1 - y0
+dh <- sqrt((dx)^2 + (dy)^2)
+sz <- .25
+
+
 #world <- map_data("world")
 map <- ggplot() +
-      #geom_polygon(data=world, aes(long, lat, group=group), fill="gray80") +
-      geom_raster(data=climate, aes(x, y, fill = layer)) +
-      geom_path(data=d, aes(x, y, group=id), color="black", size=.35,
-                arrow=arrow(type="closed", angle=20, length=unit(.05, "in"))) +
-      geom_point(data=dp, aes(x, y), color="black") +
-      geom_text(data=dp, aes(x, y-7, label=i), color="black", size=4) +
-      # scale_fill_gradientn(colors=c("gray97", "azure", "cyan", "dodgerblue", "blue",
-      #                               "purple", "red", "orange", "yellow")) +
+      geom_raster(data=clim, aes(x, y, fill = clim0)) +
+      geom_path(data=d %>% filter(! i %in% 1:2), aes(x, y, group=id), color="black", size=.35) +
+      geom_point(data=dp %>% filter(! i %in% 1:2), aes(x, y), color="black") +
+      geom_point(data=de %>% filter(! i %in% 1:2), aes(x, y), color="black", fill="white", shape=21) +
+      geom_text(data=dp %>% filter(! i %in% 1:2), 
+                aes(x, y-7, label=i), color="black", size=4) +
+      
+      annotate(geom="segment", size=sz, x=x1, y=y1, 
+               xend=x0 + dx * (r0 / dh), 
+               yend=y0 + dy * (r0 / dh)) +
+      geom_polygon(data=fortify(circle_lg), aes(long, lat),
+                   color="black", fill="white", size=sz) +
+      geom_raster(data=clim_circ, aes(x, y, fill = clim0)) +
+      geom_polygon(data=fortify(circle_sm), aes(long, lat),
+                   color="black", fill=NA, size=sz) +
+      geom_polygon(data=fortify(circle_lg), aes(long, lat),
+                   color="black", fill=NA, size=sz) +
+      geom_path(data=d_circ, aes(x, y, group=id), 
+                color="black", size=sz) +
+      geom_point(data=dp_circ, aes(x, y), color="black") +
+      geom_point(data=de_circ, aes(x, y), color="black", fill="white", shape=21) +
+      geom_text(data=dp_circ, aes(x, y-7, label=i), color="black", size=4) +
+      
+      
+      
       scale_fill_gradientn(colors=c("black", "black", "black", "darkmagenta", "#6b49ff", 
                                     "dodgerblue", "turquoise", "#48c13f", 
                                     "gold", "red", "#660000")) +
       #theme_void() +
-      theme(legend.position="none",
+      labs(fill="°C") +
+      guides(fill=guide_colorbar(barwidth=7, barheight=.3)) +
+      theme(legend.position=c(.6, .22),
+            legend.direction="horizontal",
+            legend.background=element_blank(),
             axis.title.y=element_blank(),
             axis.title.x=element_text(color="white"), # all this whiteness makes it align with latitude plot
             axis.text=element_text(color="white"),
@@ -305,7 +351,11 @@ map <- ggplot() +
             panel.background = element_rect(fill="gray90")) +
       scale_x_continuous(expand=c(0,0)) +
       scale_y_continuous(expand=c(0,0), limits=c(-90, 90), breaks=xb)
+
 #ggsave("figures/transects/map.png", p, width=6, height=3, units="in")
+
+
+
 
 
 
