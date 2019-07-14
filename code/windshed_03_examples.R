@@ -19,33 +19,154 @@ select <- dplyr::select
 
 stop("get functions and input datasets from windshed_02_analysis script")
 
-f <- read_csv("data/windshed/force_500km_v2.csv") %>%
+
+f <- read_csv("data/windshed/p2_500km.csv") %>%
       select(-runtime) %>%
       gather(var, value, -x, -y) %>%
       separate(var, c("property", "direction", "moment", "stat"), sep="_")
 
 
 
+woc <- function(x, y, windrose, climate, 
+                radius = 1000, time_conv=identity,
+                sigma = 2,
+                output = "summary"){
+      #browser()
+      start <- Sys.time()
+      coords <- c(x, y)
+      origin <- matrix(coords, ncol=2)
+      message(paste(coords, collapse=" "))
+      
+      # constrain analysis to region around focal point
+      coords_ll <- SpatialPoints(origin, crs(climate)) %>%
+            spTransform(CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")) %>%
+            coordinates()
+      circle <- geo_circle(coords_ll, width = radius * 1000) # km to m
+      
+      # prepare wind and climate datasets       
+      wind <- windrose %>% crop(circle) %>% mask(circle) %>% add_coords() 
+      downtrans <- wind %>% transition_stack(windflow, directions=8, symm=F, direction="downwind")
+      uptrans <- wind %>% transition_stack(windflow, directions=8, symm=F, direction="upwind")
+      clim <- climate %>% crop(circle) %>% mask(circle)
+      
+      # calculate wind catchment and climate analog surfaces
+      s <- list(wind_fwd = accCost(downtrans, origin) / 3600,
+                wind_rev = accCost(uptrans, origin) / 3600,
+                clim_fwd = analogs(clim, coords, sigma=sigma),
+                clim_rev = analogs(clim, coords, sigma=sigma, reverse = T)) %>%
+            stack()
+      
+      # modify wind values
+      s$wind_fwd <- calc(s$wind_fwd, time_conv) %>% mask(clim[[1]])
+      s$wind_rev <- calc(s$wind_rev, time_conv) %>% mask(clim[[1]])
+      
+      # overlap between wind and climate
+      s$overlap_fwd <- s$wind_fwd * s$clim_fwd
+      s$overlap_rev <- s$wind_rev * s$clim_rev
+      
+      # set water values to zero
+      s[is.na(s[])] <- 0
+      s <- mask(s, circle)
+      if(output == "rasters") return(s)
+      
+      # summary statistics of wind and climate surfaces
+      ex <- extent(s)
+      if(ex@xmin < -180){
+            shft <- -180 - ex@xmin
+            s <- shift(s, shft) # ws_summarize needs real geography
+            origin[1,1] <- origin[1,1] + shft
+      }
+      if(ex@xmax > 180){
+            shft <- 180 - ex@xmax
+            s <- shift(s, shft)
+            origin[1,1] <- origin[1,1] + shft
+      }
+      
+      ss <- s %>% as.list() %>% lapply(ws_summarize, origin=origin)
+      for(i in 1:length(ss)) names(ss[[i]]) <- paste0(names(s)[i], "_", names(ss[[i]]))
+      ss <- unlist(ss)
+      
+      if(output == "summary") return(c(x=x, y=y, ss,
+                                       runtime = difftime(Sys.time(), start, units="secs")))
+      stop("invalid output argument")
+}
    
 
 #### some random examples ####
 
+n <- 28
 e <- f %>%
       select(x, y) %>%
-      sample_n(48) %>%
+      filter(abs(y)<75) %>%
+      sample_n(n) %>%
       mutate(id = 1:nrow(.))
 
-cost_to_flow <- function(cost) (1/(cost)) ^ (1/3)
+time_conv <- identity
 
 r <- map2(e$x, e$y, possibly(woc, NULL), 
-          windrose=rose, climate=climate, cost_to_flow=cost_to_flow, radius=500,
+          windrose=rose, climate=climate, 
+          time_conv=time_conv, radius=500,
           output="rasters")
 
-d <- r %>% lapply(rasterToPoints) %>% lapply(as.data.frame)
+
+d <- r[1:n] %>% lapply(rasterToPoints) %>% lapply(as.data.frame)
 for(i in 1:length(d)) d[[i]]$id <- i
 d <- bind_rows(d)
-
 d <- filter(d, is.finite(wind_fwd))
+
+p <- ggplot() +
+      geom_raster(data=d, aes(x, y, fill=wind_fwd)) +
+      facet_wrap(~ id, nrow=4, scales="free") +
+      scale_fill_gradientn(colors=c("white", "yellow", "red", "blue", 
+                                    "darkblue", "black"),
+                           na.value="gray80", trans="log10") +
+      scale_fill_gradientn(colors=c("white", "yellow", "darkred", "black", "black"),
+                           na.value="lightblue", trans="log10") +
+      #geom_point(data=e[1:n,], aes(x, y), color="cyan") +
+      guides(fill=guide_colorbar(barwidth=25)) +
+      theme_void() + 
+      theme(strip.text = element_blank(),
+            text = element_text(size=25),
+            plot.title=element_text(size=10),
+            legend.position="top") +
+      labs(fill="wind hours from origin")
+ggsave("figures/windsheds/examples_wind.png", p,
+       width=16, height=9, units="in")
+
+p <- ggplot() +
+      geom_raster(data=d %>% mutate(clim_fwd=ifelse(clim_fwd != 0, clim_fwd, NA)), 
+                  aes(x, y, fill=clim_fwd)) +
+      facet_wrap(~ id, nrow=4, scales="free") +
+      scale_fill_gradientn(colors=c("yellow", "darkred", "black") %>%
+                                 rev(),
+                           na.value="lightblue", limits=0:1) +
+      geom_point(data=e[1:n,], aes(x, y), color="green", size=2.5) +
+      guides(fill=guide_colorbar(barwidth=25)) +
+      theme_void() + 
+      theme(strip.text = element_blank(),
+            text = element_text(size=25),
+            plot.title=element_text(size=10),
+            legend.position="top") +
+      labs(fill="climatic similarity")
+ggsave("figures/windsheds/examples_analogs.png", p,
+       width=16, height=9, units="in")
+
+
+p <- ggplot() +
+      geom_raster(data=d, aes(x, y, fill=-log10(wind_fwd) * (1-clim_fwd) + 4)) +
+      facet_wrap(~ id, nrow=4, scales="free") +
+      scale_fill_gradientn(colors=c("black", "darkred", "yellow"),
+                           na.value="lightblue") +
+      #geom_point(data=e[1:n,], aes(x, y), color="cyan") +
+      guides(fill=guide_colorbar(barwidth=25)) +
+      theme_void() + 
+      theme(strip.text = element_blank(),
+            text = element_text(size=25),
+            plot.title=element_text(size=10),
+            legend.position="top")
+ggsave("figures/windsheds/examples_overlap.png", p,
+       width=16, height=9, units="in")
+
 
 d$color <- colors2d(select(d, clim_fwd, wind_fwd),
                     c("green", "gold", "black", "cyan"))
