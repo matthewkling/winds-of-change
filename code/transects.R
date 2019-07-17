@@ -12,7 +12,7 @@ land <- raster("f:/cfsr/land.tif") %>%
       rotate()
 
 # load windrose data
-rose <- stack("data/windrose/windrose_p2_2000s.tif") %>%
+rose <- stack("data/windrose/windrose_p1_2000s.tif") %>%
       rotate()
 
 # downweight conductance over water
@@ -289,7 +289,7 @@ circle_lg <- swfscMisc::circle.polygon(x1, y1, r1, poly.type="cartesian") %>%
       mapview::coords2Polygons(ID = "A")
 clim_circ <- climate[[1]] %>%
       crop(circle_sm) %>% mask(circle_sm) %>%
-      rasterToPoints() %>% 
+      rasterToPoints() %>% as.data.frame() %>%
       mutate(x=((x-x0)/r0*r1)+x1, 
              y=((y-y0)/r0*r1)+y1)
 d_circ <- d %>%
@@ -304,6 +304,9 @@ dx <- x1 - x0
 dy <- y1 - y0
 dh <- sqrt((dx)^2 + (dy)^2)
 sz <- .25
+
+
+xb <- seq(-90, 90, 30)
 
 
 #world <- map_data("world")
@@ -391,7 +394,6 @@ vs <- v %>%
              
              yend = temp + (v)*sign(dtemp)*15)
 
-xb <- seq(-90, 90, 30)
 
 bands <- data.frame(x0 = xb[1:6], x1 = xb[2:7],
                     name = c("Polar\ncell", "Ferrel\ncell", "Hadley\ncell")[c(1:3,3:1)],
@@ -434,3 +436,20 @@ pc <- arrangeGrob(pc, p, ncol=1, heights=c(1, 4/3))
 ggsave("figures/transects/transects.png", pc, width=9, height=7, units="in")
 ggsave("figures/manuscript/fig_2.png", pc, width=9, height=7, units="in")
 
+
+darkness <- theme(plot.background = element_rect(fill="black", color="black"),
+                  text = element_text(color="white"),
+                  strip.text = element_text(color="white"),
+                  axis.text = element_text(color="white"))
+
+pc <- arrangeGrob(map + darkness + 
+                        theme(axis.text = element_text(color="black"),
+                                         axis.title = element_text(color="black"),
+                                         axis.ticks = element_line(color="black")), 
+                  latitude + darkness + 
+                        theme(panel.background = element_rect(fill="white")), 
+                  nrow=1, widths=c(1.5, 1))
+pc <- arrangeGrob(pc, 
+                  p + darkness, 
+                  ncol=1, heights=c(1, 4/3))
+ggsave("figures/transects/transects_black.png", pc, width=9, height=7, units="in", bg="black")
