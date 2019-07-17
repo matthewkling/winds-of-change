@@ -228,14 +228,16 @@ for(drn in c("fwd", "rev")){
 
 ### climate analog curve
 
-sigma <- 1
+sigma <- 2
 kernel <- function(x) exp(-.5*(x/sigma)^2)
 p <- ggplot(data.frame(temp_diff = seq(-10, 10, .1)) %>%
                   mutate(similarity = kernel(temp_diff)),
             aes(temp_diff, similarity)) +
       geom_line(color="darkred", size=1) +
       theme_minimal() +
-      scale_x_continuous(breaks=-10:10)
+      scale_x_continuous(breaks=-10:10, limits=c(-6, 6)) +
+      labs(x = "spatiotemporal temperature difference (°C)",
+           y = "similarity score")
 ggsave("figures/windsheds/temp_kernel.png", 
        width=6, height=4, units="in")
 
