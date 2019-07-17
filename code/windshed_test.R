@@ -5,7 +5,6 @@ library(raster)
 library(gdistance)
 
 
-
 # build windrose based on uniform distribution of wind vectors
 if(F){
       f <- list.files("f:/CFSR/wnd10m", full.names=T)
@@ -13,24 +12,44 @@ if(F){
       if(F) r <- raster(f[1])
       
       a <- r # %>% aggregate(2)
-      #a <- crop(a, extent(80, 120, -90, 90))
+      a <- crop(a, extent(80, 90, 0, 10))
       s <- a
       s[] <- 0
+      # a uniform distribution of wind angles
       for(i in seq(0, 359, 1)){
             a[] <- i
             s <- stack(s, a)
       }
+      s <- s[[2:nlayers(s)]]
       
-      u <- calc(s, function(x) sin(x / 180 * pi))
-      v <- calc(s, function(x) cos(x / 180 * pi))
+      # u,v components at 5 m/s
+      u <- calc(s, function(x) sin(x / 180 * pi)) * 5
+      v <- calc(s, function(x) cos(x / 180 * pi)) * 5
       w <- stack(u, v)
       
-      rosefun <- function(x) windrose_geo(x)
-      wr <- add_res(w)
-      wr <- add_lat(wr)
-      wr <- raster::calc(wr, fun=rosefun, forceapply=TRUE)
-      wr <- wr[[1:8]]
+      p <- 1
+      wr <- w %>%
+            add_res() %>%
+            add_lat() %>%
+            raster::calc(fun=function(x) windrose_geo(x, p=p), 
+                         forceapply=TRUE)
+      
+      # units are currently summed conductances in 1/sec^p
+      # divide by number of timesteps, to give mean conductance,
+      # and then convert back to 1/s
+      wr <- wr / nlayers(u)
+      wr <- wr ^ (1/p)
       names(wr) <- c("SW", "W", "NW", "N", "NE", "E", "SE", "S")
+      
+      #### checks ###
+      # near equator, northeatward inter-cell distance in meters is
+      icd <- distGeo(c(0,0), c(res(wr)[1],0))
+      # and transit speed is 5 m/s divided by 8 neighbors
+      vel <- 5^p / 8
+      # check that they're similar
+      plot(1/wr$E^p, main=icd/vel)
+      # oh yeah
+      
       
       saveRDS(wr, "data/windrose/isotropy_test_data.rds")
 }
@@ -73,19 +92,20 @@ ws <- function(x, y, windrose,
       
       wshd <- windrose %>% crop(circle) %>% mask(circle) %>% 
             add_coords() %>% 
-            transition_stack(diffuse, directions=8, symm=F) %>%
-            windshed(trans, coords)
+            transition_stack(windflow, directions=8, symm=F, direction="downwind") %>%
+            accCost(coords)
       
       dst <- wshd
-      dst[] <- pointDistance(coords, coordinates(dst), lonlat=T) / 1000
+      dst[] <- pointDistance(coords, coordinates(dst), lonlat=T)
       stack(wshd, dst)
 }
 
 
 lats <- seq(1, 85, 1)
+lats <- 5
 
 d <- lats %>%
-      lapply(function(x) ws(100, x, wr, 500)) %>%
+      lapply(function(x) ws(85, x, wr, 500)) %>%
       lapply(rasterToPoints) %>%
       lapply(as.data.frame) %>%
       lapply(function(x) mutate(x, id=y[1])) %>%

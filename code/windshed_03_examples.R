@@ -65,7 +65,8 @@ woc <- function(x, y, windrose, climate,
       s$overlap_rev <- s$wind_rev * s$clim_rev
       
       # set water values to zero
-      s[is.na(s[])] <- 0
+      #s$wind_fwd[is.na(s$wind_fwd[])] <- max(na.omit(values(s$wind_fwd)))
+      #s[is.na(s[])] <- 0
       s <- mask(s, circle)
       if(output == "rasters") return(s)
       
@@ -94,13 +95,22 @@ woc <- function(x, y, windrose, climate,
 
 #### some random examples ####
 
-n <- 28
+em <- data.frame(x=c(98.12386, 143.43630,  -66.25091, -38.12595, 
+                     28.74896, 104.3739, -61.56342, 118.7488),
+                 y=c(26.38193, -32.31396,  -2.341591, 71.34048, 
+                     -12.64459, 27.31857, 2.966016, 54.16881))
+em <- em[c(3, 7, 5, 8, 1, 6, 2, 4),]
+#em <- em[1,]
+
+n <- 8
 e <- f %>%
       select(x, y) %>%
       filter(abs(y)<75) %>%
-      sample_n(n) %>%
+      sample_n(n-nrow(em)) %>%
+      bind_rows(em, .) %>%
       mutate(id = 1:nrow(.))
 
+time_conv <- identity
 time_conv <- identity
 
 r <- map2(e$x, e$y, possibly(woc, NULL), 
@@ -114,24 +124,34 @@ for(i in 1:length(d)) d[[i]]$id <- i
 d <- bind_rows(d)
 d <- filter(d, is.finite(wind_fwd))
 
+#d <- mutate(d, wind_fwd = 1/(sqrt(wind_fwd)))
+d <- mutate(d, wind_fwd = ifelse(wind_fwd > quantile(wind_fwd, .95),
+                                 quantile(wind_fwd, .95),
+                                 wind_fwd))
+dd <- e
+m <- 1
+
 p <- ggplot() +
       geom_raster(data=d, aes(x, y, fill=wind_fwd)) +
-      facet_wrap(~ id, nrow=4, scales="free") +
-      scale_fill_gradientn(colors=c("white", "yellow", "red", "blue", 
-                                    "darkblue", "black"),
-                           na.value="gray80", trans="log10") +
-      scale_fill_gradientn(colors=c("white", "yellow", "darkred", "black", "black"),
-                           na.value="lightblue", trans="log10") +
-      #geom_point(data=e[1:n,], aes(x, y), color="cyan") +
+      facet_wrap(~ id, nrow=2, scales="free") +
+      geom_contour(data=d, aes(x, y, z=wind_fwd), binwidth=max(d$wind_fwd)/50,
+                   color="#290000", alpha=.5, size=1) +
+      geom_vline(data=e[1:n,], aes(xintercept=x), color="white", size=.5) +
+      geom_hline(data=e[1:n,], aes(yintercept=y), color="white", size=.5) +
+      scale_fill_gradientn(colors=c("cyan", "purple", "darkred", "#290000")) +
       guides(fill=guide_colorbar(barwidth=25)) +
       theme_void() + 
       theme(strip.text = element_blank(),
-            text = element_text(size=25),
+            plot.background=element_rect(fill="black", color="black"),
+            text = element_text(size=25, color="white"),
             plot.title=element_text(size=10),
             legend.position="top") +
       labs(fill="wind hours from origin")
-ggsave("figures/windsheds/examples_wind.png", p,
+ggsave("figures/windsheds/examples/examples_wind.png", p,
        width=16, height=9, units="in")
+
+
+
 
 p <- ggplot() +
       geom_raster(data=d %>% mutate(clim_fwd=ifelse(clim_fwd != 0, clim_fwd, NA)), 
@@ -148,7 +168,7 @@ p <- ggplot() +
             plot.title=element_text(size=10),
             legend.position="top") +
       labs(fill="climatic similarity")
-ggsave("figures/windsheds/examples_analogs.png", p,
+ggsave("figures/windsheds/examples/examples_analogs.png", p,
        width=16, height=9, units="in")
 
 
@@ -164,7 +184,7 @@ p <- ggplot() +
             text = element_text(size=25),
             plot.title=element_text(size=10),
             legend.position="top")
-ggsave("figures/windsheds/examples_overlap.png", p,
+ggsave("figures/windsheds/examples/examples_overlap.png", p,
        width=16, height=9, units="in")
 
 
@@ -185,7 +205,7 @@ scatter <- ggplot(d, aes(clim_fwd, wind_fwd)) +
       theme(plot.background = element_rect(fill="white", color="white")) +
       labs(x = "climatic analogy",
            y = "wind connectivity")
-png("figures/windsheds/examples.png", width=1000, height=750)
+png("figures/windsheds/examples/examples.png", width=1000, height=750)
 plot(maps)
 plot(scatter, vp=viewport(x=0, y=1, width=.25, height=.333,
                           just = c("left", "top")))
@@ -230,7 +250,7 @@ p <- ggplot() +
       theme(strip.text.y = element_text(angle=-90),
             legend.position="none") +
       coord_fixed()
-ggsave("figures/windsheds/example_landscape.png", 
+ggsave("figures/windsheds/examples/example_landscape.png", 
        p, width=6, height=4, units="in")
 
 
