@@ -52,6 +52,8 @@ grangle <- function(x){
 neighborhoods <- c(3, 9, 27)
 for(neigh in neighborhoods){
       
+      land <- raster("f:/cfsr/land.tif")
+      
       wmat <- matrix(1, neigh, neigh)
       
       ta <- focal(mask(t, land), w=wmat, fun=grangle) %>% rotate()
@@ -190,6 +192,24 @@ for(neigh in neighborhoods){
                   plot.background=element_blank(),
                   panel.background=element_blank(),
                   panel.grid=element_blank())
+      
+      brk <- data.frame(x=c(0, 45, 90, 135, 180),
+                        y=1.5)
+      legend <- ggplot() +
+            geom_segment(data=brk, aes(x=x, xend=x, 
+                     y=0, yend=1, color=x), size=2) +
+            geom_text(data=brk, aes(x, y, label=paste0(x, "°"), 
+                                    color=x),
+                       size=15) +
+            geom_point(data=data.frame(x=seq(0, 180, 1)),
+                       aes(x, 1, color=x), size=10) +
+            coord_polar() +
+            xlim(0, 360) +
+            ylim(0, NA) +
+            scale_color_gradientn(colors=(pal)) +
+            theme_void() +
+            theme(legend.position="none")
+      
       map <- ggplot() +
             geom_raster(data=dl, 
                         aes(x, y), fill=col_v0) +
@@ -204,11 +224,12 @@ for(neigh in neighborhoods){
             theme(legend.position="none",
                   panel.background=element_rect(fill="black"))
       png(paste0("figures/tailwinds/alignment_s", neigh, ".png"), width=2000, height=1000)
+      nudgey <- .08
       plot(map)
-      plot(tach, vp=viewport(x=.04, y=.33, width=.3, height=.5))
-      grid.text("tailwind", hjust=0, x=.04, y=.58, gp=gpar(col=pal[1], cex=2.5, fontface="bold"))
-      grid.text("crosswind", hjust=0, x=.18, y=.335, gp=gpar(col=pal[3], cex=2.5, fontface="bold"))
-      grid.text("headwind", hjust=0, x=.04, y=.09, gp=gpar(col=pal[5], cex=2.5, fontface="bold"))
+      plot(legend, vp=viewport(x=.07, y=.33+nudgey, width=.3, height=.5))
+      grid.text("tailwind", hjust=0.5, x=.07, y=.58+nudgey, gp=gpar(col=pal[1], cex=3.5, fontface="bold"))
+      #grid.text("crosswind", hjust=0, x=.11, y=.335+nudgey, gp=gpar(col=pal[3], cex=3.5, fontface="bold"))
+      grid.text("headwind", hjust=0.5, x=.07, y=.09+nudgey, gp=gpar(col=pal[5], cex=3.5, fontface="bold"))
       dev.off()
 }
 
