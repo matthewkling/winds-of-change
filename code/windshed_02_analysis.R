@@ -48,8 +48,10 @@ geo_circle <- function(pts, width, thresh=100) {
       poly
 }
 
-woc <- function(x, y, windrose, climate, 
-                radius = 1000, cost_to_flow, 
+
+woc <- function(x, y, windrose, climate,
+                radius = 1000, time_conv=identity,
+                sigma = 2,
                 output = "summary"){
       
       start <- Sys.time()
@@ -65,31 +67,31 @@ woc <- function(x, y, windrose, climate,
       
       # prepare wind and climate datasets       
       wind <- windrose %>% crop(circle) %>% mask(circle) %>% add_coords() 
-      downtrans <- wind %>% transition_stack(downwind, directions=8, symm=F)
-      uptrans <- wind %>% transition_stack(upwind, directions=8, symm=F)
+      downtrans <- wind %>% transition_stack(windflow, directions=8, symm=F, direction="downwind")
+      uptrans <- wind %>% transition_stack(windflow, directions=8, symm=F, direction="upwind")
       clim <- climate %>% crop(circle) %>% mask(circle)
       
       # calculate wind catchment and climate analog surfaces
-      s <- list(wind_fwd = accCost(downtrans, origin),
-                wind_rev = accCost(uptrans, origin),
-                clim_fwd = analogs(clim, coords),
-                clim_rev = analogs(clim, coords, reverse = T)) %>%
+      s <- list(wind_fwd = accCost(downtrans, origin) %>% "/"(3600) %>% calc(time_conv),
+                wind_rev = accCost(uptrans, origin) %>% "/"(3600) %>% calc(time_conv),
+                clim_fwd = analogs(clim, coords, sigma=sigma),
+                clim_rev = analogs(clim, coords, sigma=sigma, reverse = T)) %>%
             stack()
       
-      # modify wind values
-      s$wind_fwd <- calc(s$wind_fwd, cost_to_flow) %>% mask(clim[[1]])
-      s$wind_rev <- calc(s$wind_rev, cost_to_flow) %>% mask(clim[[1]])
+      # climate similarity over water is 0
+      n_cells <- length(na.omit(values(s$clim_fwd)))
+      s[is.na(values(s))] <- 0
+      s <- mask(s, circle)
       
       # overlap between wind and climate
       s$overlap_fwd <- s$wind_fwd * s$clim_fwd
       s$overlap_rev <- s$wind_rev * s$clim_rev
       
-      # set water values to zero
-      s[is.na(s[])] <- 0
-      s <- mask(s, circle)
       if(output == "rasters") return(s)
       
-      # summary statistics of wind and climate surfaces
+      
+      ### summary statistics of wind and climate surfaces
+      
       ex <- extent(s)
       if(ex@xmin < -180){
             shft <- -180 - ex@xmin
@@ -119,35 +121,39 @@ land <- raster("f:/cfsr/land.tif") %>%
       rotate() %>% unwrap(180)
 
 # load windrose data
-rose <- stack("data/windrose/windrose_p2_2000s.tif") %>%
+rose <- stack("data/windrose/windrose_p1_2000s.tif") %>%
       rotate() %>% unwrap(180)
 
 # downweight conductance over water
 rose <- land %>%
-      reclassify(c(NA, NA, .1)) %>% # weight of .1 makes it possible to cross narrow waterways
+      reclassify(c(NA, NA, .1)) %>% # weight=.1 makes it possible to cross narrow waterways
       "*"(rose)
 
 # load current/future climate data
 climate <- stack("data/geographic/processed/temperature.tif") %>% unwrap(180)
 
 
+time_conv <- function(x) .995 ^ x
+
+
 # function to convert wind cost values to flow values
 #cost_to_flow <- function(cost) .5 ^ (cost * 1e8)
 #cost_to_flow <- function(cost) (1/cost) ^ (1/2)
 #cost_to_flow <- function(cost) log10(1/cost) + 8
-cost_to_flow <- function(cost) 1/log10(cost)
+#cost_to_flow <- function(cost) 1/log10(cost)
+
 
 # test
 coords <- c(179, 67)
-x <- woc(coords[1], coords[2], rose, climate, cost_to_flow=cost_to_flow)
-#profvis({ x <- woc(coords[1], coords[2], rose, climate, cost_to_flow=cost_to_flow) })
+x <- woc(coords[1], coords[2], rose, climate, time_conv=time_conv)
+#profvis({ x <- woc(coords[1], coords[2], rose, climate, time_conv=identity) })
 
-ncores <- 6
+ncores <- 7
 pixels <- land %>%
       rasterToPoints() %>%
       as.data.frame() %>%
-      filter(x < 180, x > -180) %>%
-      #sample_n(1000) %>%
+      filter(abs(x) <= 180) %>%
+      #sample_n(nrow(.)/100) %>%
       mutate(batch = sample(1:ncores, nrow(.), replace=T)) %>%
       split(.$batch)
 
@@ -160,13 +166,13 @@ d <- foreach(pts = pixels,
              .combine="rbind",
              .packages=(.packages())) %dopar% {
                    map2(pts$x, pts$y, possibly(woc, NULL), 
-                        windrose=rose, climate=climate, cost_to_flow=cost_to_flow, radius=500) %>%
+                        windrose=rose, climate=climate, time_conv=time_conv, radius=500) %>%
                          do.call("rbind", .) %>%
                          as.data.frame()
              }
 Sys.time() - start
 stopCluster(cl)
-write_csv(d, "data/windshed/p2_500km.csv")
+write_csv(d, "data/windshed/p1_500km.csv")
 
 
 stop("wootwoot")

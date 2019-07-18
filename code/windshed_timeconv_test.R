@@ -1,17 +1,17 @@
 
 
+dtc <- raster("data/geographic/processed/coastal_distance.tif")
 
-f <- read_csv("data/windshed/p2_500km.csv") %>%
-      select(-runtime) %>%
-      gather(var, value, -x, -y) %>%
-      separate(var, c("property", "direction", "moment", "stat"), sep="_")
-
+f <- read_csv("data/windshed/p1_500km.csv") %>% select(x, y)
+coordinates(f) <- c("x", "y")
+f$dtc <- raster::extract(dtc, f)
+f <- as.data.frame(f)
 
 
 n <- 100
 e <- f %>%
+      filter(dtc > 500, abs(y)<75) %>%
       select(x, y) %>%
-      filter(abs(y)<75) %>%
       sample_n(n) %>%
       mutate(id = 1:nrow(.))
 
@@ -38,13 +38,12 @@ d <- filter(d, is.finite(wind_fwd))
 #                                 wind_fwd))
 #d <- mutate(d, wind_fwd = .995 ^ wind_fwd)
 hist(d$wind_fwd)
+d %>% group_by(id) %>% summarize(size = sum(wind_fwd, na.rm=T)) %>% pull(size) %>% hist()
 
-dd <- e
-m <- 1
 
 d <- d %>% group_by(id) %>% mutate(size = sum(wind_fwd, na.rm=T)) %>% ungroup() %>%
       mutate(size=as.integer(factor(size)))
-      
+    
 
 p <- ggplot() +
       geom_raster(data=d, aes(x, y, fill=wind_fwd)) +
@@ -62,5 +61,5 @@ p <- ggplot() +
             plot.title=element_text(size=10),
             legend.position="top") +
       labs(fill="windsheds")
-ggsave("figures/windsheds/examples/examples_timeconv.png", p,
+ggsave("figures/windsheds/tests/examples_timeconv.png", p,
        width=20, height=20, units="in")
