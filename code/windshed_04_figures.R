@@ -15,13 +15,68 @@ library(scales)
 
 select <- dplyr::select
 
+
+
+infile <- "data/windshed/p1_500km.csv"
+
+
+### correlations between geography and windshed stats
+
+# geographic and windshed attributes
+xy <- read_csv(infile) %>% select(x, y)
+coordinates(xy) <- c("x", "y")
+geo <- list.files("data/geographic/processed", full.names=T)
+geo <- stack(geo[!grepl("temperature", geo)])
+geo <- extract(geo, xy) %>% cbind(latitude = coordinates(xy)[,"y"])
+geo <- as.data.frame(geo)
+geo <- rename(geo, continentality = coastal_distance)
+
+f <- read_csv(infile) %>%
+      select(-runtime) 
+
+d <- geo %>% 
+      select(elevation, latitude, continentality) %>%
+      mutate(latitude = abs(latitude)) %>%
+      filter(latitude < 85) %>%
+      cbind(f) %>%
+      gather(var, value, -x, -y, -elevation, -latitude, -continentality) %>%
+      separate(var, c("property", "direction", "moment", "stat"), sep="_") %>%
+      mutate(direction = ifelse(direction=="fwd", "outbound", "inbound"))
+
+d <- d %>%
+      filter(moment == "windshed",
+             stat == "size",
+             direction == "outbound") %>%
+      gather(attr, coord, elevation, latitude, continentality)
+
+d <- spread(d, property, value) %>%
+      mutate(windfill = overlap / clim) %>%
+      gather(property, value, clim, wind, overlap, windfill)
+
+p <- ggplot(d %>% sample_n(100000), 
+            aes(coord, value)) +
+      facet_grid(property ~ attr, scales="free") +
+      geom_point(size=.2) +
+      geom_smooth(se=F, color="red") +
+      theme_minimal() +
+      labs(title = "Geographic relationships with forward windshed summary statistics") +
+      theme(axis.title=element_blank())
+ggsave("figures/windsheds/global/scatter_windshed_geography.png", 
+       width=8, height=8, units="in")
+
+
+
+
+
+
+
 #####################
 
-
-f <- read_csv("data/windshed/p2_500km.csv") %>%
+f <- read_csv(infile) %>%
       select(-runtime) %>%
       gather(var, value, -x, -y) %>%
-      separate(var, c("property", "direction", "moment", "stat"), sep="_")
+      separate(var, c("property", "direction", "moment", "stat"), sep="_") %>%
+      mutate(direction = ifelse(direction=="fwd", "outbound", "inbound"))
 
 
 
@@ -46,8 +101,12 @@ p <- ggplot(d, aes(x_value, y_value)) +
       geom_point(size=.25) +
       labs(title = "Relationships among forward windshed summary statistics") +
       theme(axis.title=element_blank())
-ggsave("figures/windsheds/windshed_stat_correlations.png", 
+ggsave("figures/windsheds/global/windshed_stat_correlations.png", 
        width=8, height=8, units="in")
+
+
+
+
 
 
 
@@ -72,51 +131,92 @@ d <- f %>%
              stat == "size") %>%
       spread(property, value) %>%
       mutate(windfill = overlap / clim) %>%
-      gather(property, value, clim, wind, overlap, windfill) %>%
-      mutate(direction = ifelse(direction == "fwd", "forward", "reverse"))
+      gather(property, value, clim, wind, overlap, windfill)
 
+truncate <- function(x, q=.005, sides=c("high")){
+      q <- quantile(x, c(q, 1-q), na.rm=T)
+      if("low" %in% sides) x[x<q[1]] <- q[1]
+      if("high" %in% sides) x[x>q[2]] <- q[2]
+      x
+}
 
 for(var in unique(d$property)){
-      v <- filter(d, property==var)
-      trans = switch(var, 
-                     clim="identity", wind="identity", 
-                     overlap="log10", windfill="log10")
+      
+      v <- filter(d, property==var) %>% mutate(value = truncate(value))
+      
+      trans <- switch(var, 
+                      clim="identity", wind="identity", 
+                      overlap="identity", windfill="identity")
+      
+      label <- switch(var, 
+                      clim="analog\narea", wind="windshed\nsize", 
+                      overlap="windshed-\nanalog\noverlap", 
+                      windfill="analog\naccessibility")
+      
       map <- ggplot(v, aes(x, y, fill=value)) +
             facet_grid(direction ~ .) +
             geom_raster() +
-            scale_fill_viridis_c(trans=trans) +
+            #scale_fill_viridis_c(trans=trans) +
+            scale_fill_gradientn(colors=c("darkblue", "red", "yellow"),
+                                 trans=trans) +
             theme_void() +
-            theme(text=element_text(size=20),
+            theme(text=element_text(size=20, color="white"),
                   strip.text=element_text(size=20, angle=-90),
-                  legend.position=c(.1, .7)) +
+                  plot.background = element_rect(fill="black"),
+                  legend.position=c(.1, .73)) +
             guides(fill=guide_colorbar(barheight=15)) +
-            labs(fill = var)
-      ggsave(paste0("figures/windsheds/", var, ".png"), 
+            labs(fill = label)
+      ggsave(paste0("figures/windsheds/global/", var, ".png"), 
              width=12, height=12, units="in")
+      
+      for(drn in unique(v$direction)){
+            map <- ggplot(v %>% filter(direction == drn), 
+                          aes(x, y, fill=value)) +
+                  geom_raster() +
+                  scale_fill_gradientn(colors=c("darkblue", "red", "yellow"),
+                                       trans=trans) +
+                  scale_x_continuous(expand=c(0,0)) +
+                  scale_y_continuous(expand=c(0,0)) +
+                  theme_void() +
+                  theme(text=element_text(size=20, color="white"),
+                        strip.text=element_text(size=20, angle=-90),
+                        plot.background = element_rect(fill="black"),
+                        legend.position=c(.08, .45)) +
+                  guides(fill=guide_colorbar(barheight=15)) +
+                  labs(fill = label)
+            ggsave(paste0("figures/windsheds/global/", var, "_", drn, ".png"), 
+                   width=12, height=6, units="in")
+      }
       
       # forward vs reverse
       
+      v <- filter(d, property==var) %>% mutate(value = truncate(value))
       v <- v %>% 
             spread(direction, value) %>%
-            mutate(color = colors2d(cbind(rank(.$forward), rank(.$reverse)),
-                                    #cbind(.$forward, .$reverse),
-                                    c("black", "cyan", "gray85", "magenta")))
+            mutate(color = colors2d(cbind(rank(.$outbound), rank(.$inbound)),
+                                    c("white", "cyan", "gray10", "magenta")))
+                                    #c("black", "cyan", "gray85", "magenta")))
       map <- ggplot(v, aes(x, y)) +
             geom_raster(fill = v$color) +
-            theme_void()
+            scale_x_continuous(expand=c(0,0)) +
+            scale_y_continuous(expand=c(0,0)) +
+            theme_void() +
+            theme(text=element_text(size = 45, color="white"),
+                  plot.background = element_rect(fill="black"))
       
-      legend <- ggplot(v, aes(forward, reverse)) +
+      legend <- ggplot(v, aes(outbound, inbound)) +
             geom_point(color=v$color, size=.1) +
             scale_y_continuous(trans=trans) +
             scale_x_continuous(trans=trans) +
             theme_minimal() +
-            theme(text=element_text(size = 45)) +
-            labs(x = paste("forward", var),
-                 y = paste("reverse", var))
-      png(paste0("figures/windsheds/", var, "_FR.png"), 
+            theme(text=element_text(size = 55, color="white"),
+                  axis.text=element_text(color="white", size=30)) +
+            labs(x = paste("outbound"),
+                 y = paste("inbound"))
+      png(paste0("figures/windsheds/global/", var, "_FR.png"), 
           width=3000, height=1500)
       plot(map)
-      plot(legend, vp=viewport(x=.15, y=.33, width=.2, height=.4))
+      plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
       dev.off()
 }
 
@@ -130,8 +230,8 @@ dd <- d %>%
       mutate(color = colors2d(cbind(rank(.$clim), rank(.$windfill)),
                               c("forestgreen", "yellow", "red", "black")))
 
-txt <- data.frame(direction = c("forward", "reverse"),
-                  text = c("forward\n(emigration)", "reverse\n(immigration)"),
+txt <- data.frame(direction = c("outbound", "inbound"),
+                  text = c("outbound", "inbound"),
                   x = min(dd$x), y=min(dd$y) + .3 *(diff(range(dd$y))))
 
 map <- ggplot(dd, aes(x, y)) +
@@ -160,19 +260,19 @@ scat <- d %>%
                                         "area of\naccessible windshed",
                                         "area of overlap\n(analog and accessible)"))) %>%
       spread(direction, value) %>%
-      sample_n(30000) %>%
-      ggplot(aes(forward, reverse)) +
+      #sample_n(30000) %>%
+      ggplot(aes(outbound, inbound)) +
       facet_wrap(~property, ncol=1, scales="free") +
       geom_point(size=.25, alpha=.05) +
       #coord_fixed() +
       theme_minimal() +
-      labs(x="forward (emigration)",
-           y="reverse (immigration)")
+      labs(x="outbound",
+           y="inbound")
 
 p <- arrangeGrob(legend, scat, ncol=1, heights=c(1, 3))
 p <- arrangeGrob(map, p, ncol=2, widths=c(4, 1))
 ggsave("figures/manuscript/fig_4.png", p, width=10, height=8, units="in")
-ggsave("figures/windsheds/windfill_clim.png", p, width=10, height=8, units="in")
+ggsave("figures/windsheds/global/windfill_clim.png", p, width=10, height=8, units="in")
 
 # png("figures/windsheds/windfill_clim.png", width=3000, height=2000)
 # grid.draw(p)
@@ -180,11 +280,48 @@ ggsave("figures/windsheds/windfill_clim.png", p, width=10, height=8, units="in")
 
 
 
+### climate vs windfilling
+
+for(drn in c("inbound", "outbound")){
+      
+      dd <- d %>%
+            filter(direction==drn) %>%
+            select(-moment, -stat) %>%
+            spread(property, value) %>%
+            mutate(windfill = overlap / clim) %>%
+            filter(is.finite(clim), is.finite(windfill)) %>%
+            mutate(clim = truncate(clim),
+                   windfill = truncate(windfill)) %>%
+            mutate(color = colors2d(cbind((.$clim), (.$windfill)),
+                                    c("white", "red", "gray10", "forestgreen")))
+      
+      map <- ggplot(dd, aes(x, y)) +
+            geom_raster(fill=dd$color) +
+            scale_x_continuous(expand=c(0,0)) +
+            scale_y_continuous(expand=c(0,0)) +
+            theme_void() +
+            theme(text=element_text(color="white"),
+                  plot.background = element_rect(fill="black"))
+      legend <- ggplot(dd, aes(clim, windfill)) +
+            geom_point(color=dd$color, size=.2) +
+            theme_minimal() +
+            theme(text=element_text(size = 45, color="white"),
+                  axis.text=element_text(color="white"),
+                  strip.text=element_blank()) +
+            labs(x = "area of analog climate",
+                 y = "proportion windfilling")
+      png(paste0("figures/windsheds/global/windfill_clim_", drn, ".png"), 
+          width=3000, height=1500)
+      plot(map)
+      plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
+      dev.off()
+      
+}
 
 
 ### map isotropy vs hindrance
 
-for(drn in c("fwd", "rev")){
+for(drn in c("inbound", "outbound")){
       
       d <- f %>%
             filter(direction == drn,
@@ -201,26 +338,35 @@ for(drn in c("fwd", "rev")){
             select(x, y, isotropy) %>%
             left_join(d, .)
       
-      d <- d %>% mutate(color = colors2d(cbind(log(.$isotropy), rank(.$windfill)),
+      d <- filter(d, is.finite(windfill),
+                  is.finite(isotropy)) %>%
+            mutate(isotropy=truncate(isotropy))
+      
+      d <- d %>% mutate(color = colors2d(cbind((.$isotropy), (.$windfill)),
                                          c("cyan", "magenta", "darkred", "darkblue")))
       
       map <- ggplot(d, aes(x, y)) +
             geom_raster(fill=d$color) +
+            scale_x_continuous(expand=c(0,0)) +
+            scale_y_continuous(expand=c(0,0)) +
             theme_void() +
-            theme(strip.text=element_text(size=50, angle=-90))
+            theme(#strip.text=element_text(size=50, angle=-90),
+                  text=element_text(color="white"),
+                  plot.background = element_rect(fill="black"))
       legend <- ggplot(d, aes(isotropy, windfill)) +
             geom_point(color=d$color, size=.2) +
             #scale_y_log10(breaks=c(.001, .003, .01, .03, .1, .3, 1)) +
             xlim(.25, NA) +
             theme_minimal() +
-            theme(text=element_text(size = 45),
+            theme(text=element_text(size = 45, color="white"),
+                  axis.text=element_text(color="white"),
                   strip.text=element_blank()) +
             labs(x = paste(drn, "windshed isotropy"),
                  y = paste(drn, "proportion windfilling"))
-      png(paste0("figures/windsheds/isotropy_windfilling_", drn, ".png"), 
+      png(paste0("figures/windsheds/global/isotropy_windfilling_", drn, ".png"), 
           width=3000, height=1500)
       plot(map)
-      plot(legend, vp=viewport(x=.15, y=.33, width=.25, height=.4))
+      plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
       dev.off()
 }
 
