@@ -32,46 +32,37 @@ cfsr_rose <- function(infile, outdir, ncores, p){
 }
 
 
+wr_summarize <- function(fd, years, p, outfile){
+      list.files(fd, full.names=T)[1:(72*years)] %>% 
+            lapply(stack) %>%
+            Reduce("+", .) %>%
+            "/"(24 * 365 * ny) %>% # number of hours
+            "^"(1/p) %>%
+            writeRaster(outfile, overwrite=T)
+}
+
+
 # hourly input data
 f <- list.files("f:/CFSR/wnd10m", full.names=T)
 f <- f[!grepl("inv", f)]
 f <- f[grepl("gdas\\.20", f)]
 
 
+# velocity
+intdir <- "data/windrose/monthly_p1"
+map(f[1:120], possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=1)
+wr_summarize(intdir, years=10, p=1, 
+             outfile="data/windrose/windrose_p1_2000s.tif")
 
 # drag
 intdir <- "data/windrose/monthly_p2"
 map(f[1:120], possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=2)
-ny <- 10
-s <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
-      lapply(stack) %>%
-      Reduce("+", .) %>%
-      "/"(24 * 365 * ny) %>%
-      writeRaster("data/windrose_p2_2000s.tif", overwrite=T)
-
-
-
-stop("wootwoot")
-
-# velocity
-intdir <- "data/roses_velocity/cfsr_monthly"
-map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=1)
-ny <- 10
-s <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
-      lapply(stack) %>%
-      Reduce("+", .) %>%
-      "/"(24 * 365 * ny) %>%
-      writeRaster("data/roses_velocity/cfsr_climatology/roses_cfsr_2000s.tif", overwrite=T)
-
-
+wr_summarize(intdir, years=10, p=2, 
+             outfile="data/windrose/windrose_p2_2000s.tif")
 
 # force
-intdir <- "data/roses_force/cfsr_monthly"
-map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=3)
-ny <- 10
-s <- list.files(intdir, full.names=T)[1:(72*ny)] %>% 
-      lapply(stack) %>%
-      Reduce("+", .) %>%
-      "/"(24 * 365 * ny) %>%
-      writeRaster("data/roses_force/cfsr_climatology/roses_cfsr_2000s.tif", overwrite=T)
+intdir <- "data/windrose/monthly_p3"
+map(f[1:120], possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=3)
+wr_summarize(intdir, years=10, p=3, 
+             outfile="data/windrose/windrose_p3_2000s.tif")
 
