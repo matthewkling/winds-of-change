@@ -37,8 +37,8 @@ f <- read_csv(infile) %>%
 d <- geo %>% 
       select(elevation, latitude, continentality) %>%
       mutate(latitude = abs(latitude)) %>%
-      filter(latitude < 85) %>%
       cbind(f) %>%
+      filter(latitude < 85) %>%
       gather(var, value, -x, -y, -elevation, -latitude, -continentality) %>%
       separate(var, c("property", "direction", "moment", "stat"), sep="_") %>%
       mutate(direction = ifelse(direction=="fwd", "outbound", "inbound"))
@@ -51,18 +51,39 @@ d <- d %>%
 
 d <- spread(d, property, value) %>%
       mutate(windfill = overlap / clim) %>%
+      filter(wind > 0) %>%
       gather(property, value, clim, wind, overlap, windfill)
 
-p <- ggplot(d %>% sample_n(100000), 
+d <- mutate(d, property = factor(property, levels=c("clim", "wind", "overlap", "windfill"), 
+                                 labels=c("climate\narea", "windshed\narea", "climate-wind\noverlap", "windfill")),
+            attr = factor(attr, levels=c("latitude", "elevation", "continentality")))
+
+p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill"), 
             aes(coord, value)) +
       facet_grid(property ~ attr, scales="free") +
       geom_point(size=.2) +
       geom_smooth(se=F, color="red") +
       theme_minimal() +
       labs(title = "Geographic relationships with forward windshed summary statistics") +
-      theme(axis.title=element_blank())
+      theme(axis.title=element_blank(),
+            text=element_text(size=25))
 ggsave("figures/windsheds/global/scatter_windshed_geography.png", 
-       width=8, height=8, units="in")
+       width=12, height=8, units="in")
+
+
+p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill"), 
+            aes(coord, value)) +
+      facet_grid(property ~ attr, scales="free") +
+      geom_point(size=.2, color="white") +
+      geom_smooth(se=F, color="red", size=2) +
+      theme_minimal() +
+      labs(title = "Geographic relationships with forward windshed summary statistics") +
+      theme(axis.title=element_blank(),
+            strip.text=element_text(size=25, color="white"),
+            axis.text=element_text(size=15, color="white"),
+            plot.background = element_rect(fill="black"))
+ggsave("figures/windsheds/global/scatter_windshed_geography_bw.png", 
+       width=12, height=8, units="in")
 
 
 
@@ -159,10 +180,11 @@ for(var in unique(d$property)){
             #scale_fill_viridis_c(trans=trans) +
             scale_fill_gradientn(colors=c("darkblue", "red", "yellow"),
                                  trans=trans) +
+            ylim(-90, 90) +
             theme_void() +
             theme(text=element_text(size=20, color="white"),
                   strip.text=element_text(size=20, angle=-90),
-                  plot.background = element_rect(fill="black"),
+                  plot.background = element_rect(fill="black", color="black"),
                   legend.position=c(.1, .73)) +
             guides(fill=guide_colorbar(barheight=15)) +
             labs(fill = label)
@@ -176,11 +198,11 @@ for(var in unique(d$property)){
                   scale_fill_gradientn(colors=c("darkblue", "red", "yellow"),
                                        trans=trans) +
                   scale_x_continuous(expand=c(0,0)) +
-                  scale_y_continuous(expand=c(0,0)) +
+                  scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
                   theme_void() +
                   theme(text=element_text(size=20, color="white"),
                         strip.text=element_text(size=20, angle=-90),
-                        plot.background = element_rect(fill="black"),
+                        plot.background = element_rect(fill="black", color="black"),
                         legend.position=c(.08, .45)) +
                   guides(fill=guide_colorbar(barheight=15)) +
                   labs(fill = label)
@@ -199,10 +221,10 @@ for(var in unique(d$property)){
       map <- ggplot(v, aes(x, y)) +
             geom_raster(fill = v$color) +
             scale_x_continuous(expand=c(0,0)) +
-            scale_y_continuous(expand=c(0,0)) +
+            scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
             theme_void() +
             theme(text=element_text(size = 45, color="white"),
-                  plot.background = element_rect(fill="black"))
+                  plot.background = element_rect(fill="black", color="black"))
       
       legend <- ggplot(v, aes(outbound, inbound)) +
             geom_point(color=v$color, size=.1) +
@@ -239,6 +261,7 @@ map <- ggplot(dd, aes(x, y)) +
       geom_raster(fill=dd$color) +
       geom_text(data=txt, aes(x, y, label=text), 
                 hjust=0, size=6, lineheight=.75) +
+      ylim(-90, 90) +
       theme_void() +
       #theme(strip.text=element_text(size=50, angle=-90)) +
       theme(strip.text=element_blank())
@@ -298,10 +321,10 @@ for(drn in c("inbound", "outbound")){
       map <- ggplot(dd, aes(x, y)) +
             geom_raster(fill=dd$color) +
             scale_x_continuous(expand=c(0,0)) +
-            scale_y_continuous(expand=c(0,0)) +
+            scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
             theme_void() +
             theme(text=element_text(color="white"),
-                  plot.background = element_rect(fill="black"))
+                  plot.background = element_rect(fill="black", color="black"))
       legend <- ggplot(dd, aes(clim, windfill)) +
             geom_point(color=dd$color, size=.2) +
             theme_minimal() +
@@ -342,19 +365,19 @@ for(drn in c("inbound", "outbound")){
                   is.finite(isotropy)) %>%
             mutate(isotropy=truncate(isotropy))
       
-      d <- d %>% mutate(color = colors2d(cbind((.$isotropy), (.$windfill)),
+      d <- d %>% mutate(color = colors2d(cbind(rank(.$isotropy), rank(.$windfill)),
                                          c("cyan", "magenta", "darkred", "darkblue")))
       
       map <- ggplot(d, aes(x, y)) +
             geom_raster(fill=d$color) +
             scale_x_continuous(expand=c(0,0)) +
-            scale_y_continuous(expand=c(0,0)) +
+            scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
             theme_void() +
             theme(#strip.text=element_text(size=50, angle=-90),
                   text=element_text(color="white"),
-                  plot.background = element_rect(fill="black"))
+                  plot.background = element_rect(fill="black", color="black"))
       legend <- ggplot(d, aes(isotropy, windfill)) +
-            geom_point(color=d$color, size=.2) +
+            geom_point(color=d$color, size=.5) +
             #scale_y_log10(breaks=c(.001, .003, .01, .03, .1, .3, 1)) +
             xlim(.25, NA) +
             theme_minimal() +
