@@ -20,6 +20,14 @@ select <- dplyr::select
 infile <- "data/windshed/p1_500km.csv"
 
 
+
+truncate <- function(x, q=.005, sides=c("high")){
+      q <- quantile(x, c(q, 1-q), na.rm=T)
+      if("low" %in% sides) x[x<q[1]] <- q[1]
+      if("high" %in% sides) x[x>q[2]] <- q[2]
+      x
+}
+
 ### correlations between geography and windshed stats
 
 # geographic and windshed attributes
@@ -45,8 +53,9 @@ d <- geo %>%
 
 d <- d %>%
       filter(moment == "windshed",
-             stat == "size",
-             direction == "outbound") %>%
+             stat == "size"#,
+             #direction == "outbound"
+      ) %>%
       gather(attr, coord, elevation, latitude, continentality)
 
 d <- spread(d, property, value) %>%
@@ -62,7 +71,8 @@ p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill"),
             aes(coord, value)) +
       facet_grid(property ~ attr, scales="free") +
       geom_point(size=.2) +
-      geom_smooth(se=F, color="red") +
+      geom_smooth(se=F, aes(color=direction)) +
+      scale_color_manual(values=c("dodgerblue", "red")) +
       theme_minimal() +
       labs(title = "Geographic relationships with forward windshed summary statistics") +
       theme(axis.title=element_blank(),
@@ -71,11 +81,15 @@ ggsave("figures/windsheds/global/scatter_windshed_geography.png",
        width=12, height=8, units="in")
 
 
-p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill"), 
+p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill") %>% 
+                  mutate(coord = case_when(attr == "elevation" ~ log10(coord),
+                                           attr == "continentality" ~ log10(coord),
+                                           TRUE ~ coord)), 
             aes(coord, value)) +
       facet_grid(property ~ attr, scales="free") +
       geom_point(size=.2, color="white") +
-      geom_smooth(se=F, color="red", size=2) +
+      geom_smooth(se=F, aes(color=direction)) +
+      scale_color_manual(values=c("dodgerblue", "red")) +
       theme_minimal() +
       labs(title = "Geographic relationships with forward windshed summary statistics") +
       theme(axis.title=element_blank(),
@@ -85,6 +99,35 @@ p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill"),
 ggsave("figures/windsheds/global/scatter_windshed_geography_bw.png", 
        width=12, height=8, units="in")
 
+
+for(prp in unique(d$property)){
+      
+      p <- ggplot(d %>% sample_n(200000) %>% filter(property == prp) %>% 
+                        mutate(coord = case_when(attr == "elevation" ~ log10(coord),
+                                                 attr == "continentality" ~ log10(coord),
+                                                 TRUE ~ coord),
+                               coord = truncate(coord, .001, "low"),
+                               value = truncate(value, .005, "high")), 
+                  aes(coord, value)) +
+            facet_grid(. ~ attr, scales="free") +
+            geom_point(size=.2, color="white") +
+            geom_smooth(se=F, aes(color=paste(direction, "     ")), size=2) +
+            scale_color_manual(values=c("red", "dodgerblue")) +
+            theme_minimal() +
+            labs(title = "Geographic relationships with forward windshed summary statistics",
+                y = sub("\\\n", " ", prp)) +
+            theme(axis.title.x=element_blank(),
+                  axis.title.y=element_text(color="white", size=25),
+                  legend.position="bottom",
+                  strip.text=element_text(size=25, color="white"),
+                  legend.text=element_text(size=25, color="white"),
+                  axis.text=element_text(size=15, color="white"),
+                  legend.title=element_blank(),
+                  plot.background = element_rect(fill="black"))
+      ggsave(paste0("figures/windsheds/global/scatter_windshed_geography_bw_", 
+                    sub("\\\n", "", prp), ".png"), 
+             width=12, height=7.25, units="in")
+}
 
 
 
@@ -154,12 +197,6 @@ d <- f %>%
       mutate(windfill = overlap / clim) %>%
       gather(property, value, clim, wind, overlap, windfill)
 
-truncate <- function(x, q=.005, sides=c("high")){
-      q <- quantile(x, c(q, 1-q), na.rm=T)
-      if("low" %in% sides) x[x<q[1]] <- q[1]
-      if("high" %in% sides) x[x>q[2]] <- q[2]
-      x
-}
 
 for(var in unique(d$property)){
       
@@ -217,7 +254,7 @@ for(var in unique(d$property)){
             spread(direction, value) %>%
             mutate(color = colors2d(cbind(rank(.$outbound), rank(.$inbound)),
                                     c("white", "cyan", "gray10", "magenta")))
-                                    #c("black", "cyan", "gray85", "magenta")))
+      #c("black", "cyan", "gray85", "magenta")))
       map <- ggplot(v, aes(x, y)) +
             geom_raster(fill = v$color) +
             scale_x_continuous(expand=c(0,0)) +
@@ -315,8 +352,13 @@ for(drn in c("inbound", "outbound")){
             filter(is.finite(clim), is.finite(windfill)) %>%
             mutate(clim = truncate(clim),
                    windfill = truncate(windfill)) %>%
-            mutate(color = colors2d(cbind((.$clim), (.$windfill)),
-                                    c("white", "red", "gray10", "forestgreen")))
+            #mutate(color = colors2d(cbind((.$clim), (.$windfill)),
+            #                        c("white", "red", "black", "forestgreen"))) %>%
+            mutate(color = colorwheel2d(cbind((.$clim), (.$windfill)),
+                                        c("gray",
+                                          
+                                          "pink", "white", "lightgreen", "green",
+                                          "darkgreen", "black", "darkred", "red")))
       
       map <- ggplot(dd, aes(x, y)) +
             geom_raster(fill=dd$color) +
