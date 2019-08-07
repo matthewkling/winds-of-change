@@ -11,7 +11,7 @@ spdirs <- list.dirs("F:/little_trees/raw_data", full.names=T)
 
 sp <- "Pinus contorta"
 
-function(sp){
+gene <- function(sp){
       
       range <- rgdal::readOGR(spdirs[grepl(sp, spdirs)])
       ext <- extent(range)
@@ -106,6 +106,10 @@ function(sp){
             as.data.frame()
       saveRDS(d, paste0("data/case_study/data_", sp, ".rds"))
       
+      ld <- land %>%
+            crop(extent(rrange) * 1.1) %>%
+            rasterToPoints() %>%
+            as.data.frame()
       
       p <- ggplot(d, aes(x, y, fill=overlap_rev)) +
             geom_raster(data=ld, aes(x, y), fill="gray90") +
@@ -120,6 +124,7 @@ function(sp){
       ggsave(paste0("data/case_study/exploratory_plots_geneflow/", sp, ".png"), 
              p, width=5, height=5, units="in")
       
+      return(d)
 
       # d$windfill_rev <- d$overlap_rev / d$clim_rev
       # 
@@ -195,11 +200,8 @@ prep_climate <- function(){
       
       saveRDS(list(clim, fclim), "data/case_study/climate/north_america.rds")
 }
-prep_climate()
+#prep_climate()
 
-
-
-#saveRDS(list(clim, fclim), paste0("data/case_study/climate/", sp, ".rds"))
 
 
 
@@ -217,6 +219,7 @@ sdm <- function(sp){
       range <- rgdal::readOGR(spdirs[grepl(sp, spdirs)])
       ext <- extent(range) * 1.5
       ext@ymax <- ext@ymax + 20
+      #if(sp=="Pinus contorta") ext@xmin <- ext@xmin - 10
       
       # rasterize species range, ensuring holes are handled properly
       rng <- crop(clim[[1]], ext)
@@ -332,24 +335,8 @@ sdm <- function(sp){
             theme(plot.title=element_text(hjust=.5))
       ggsave(paste0("data/case_study/exploratory_plots_pressure/", sp, ".png"), p, width=8, height=6, units="in")
       
-      if(sp == "Pinus contorta"){
-            
-            p <- ggplot(d, aes(x, y)) +
-                  geom_raster(data=filter(d, is.finite(land)), fill="gray80") +
-                  geom_raster(data=filter(d, is.finite(wind)), aes(fill=windsum)) +
-                  geom_raster(data=filter(d, is.finite(range)), fill="black") +
-                  scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
-                  scale_x_continuous(expand=c(0,0), limits=range(d$x[is.finite(d$wind)])+c(0, 5)) +
-                  scale_y_continuous(expand=c(0,0)) +
-                  theme_void() +
-                  coord_fixed() +
-                  labs(fill=c("wind\npressure")) +
-                  theme(plot.title=element_text(hjust=.5),
-                        legend.position=c(.2, .3))
-            ggsave(paste0("data/case_study/exploratory_plots_pressure/", sp, ".png"), 
-                   p, width=5, height=5, units="in")
-            
-      }
+      
+      return(d)
 }
 
 
@@ -357,14 +344,45 @@ sdm <- function(sp){
 map(basename(spdirs[grepl("Abies|Acer|Betula|Fraxinus|Pinus|Picea|Populus|Ulmus", spdirs)]),
     possibly(sdm, NULL))
 
-sdm(sp)
+
+###########
+
+library(gridExtra)
+library(grid)
+
+sp <- "Pinus contorta"
+dsdm <- sdm(sp)
+dgene <- gene(sp)
+
+xlims <- c(range(dsdm$x) + c(0, -7))
+ylims <- c(range(dgene$y) + c(0, 3))
 
 
+p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
+      geom_raster(data=filter(dsdm, is.finite(land)), fill="gray80") +
+      geom_raster() +
+      annotate(geom="text", x=xlims[1]+3, y=ylims[1]+3, label="a", size=8) +
+      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+      theme_void() +
+      scale_x_continuous(expand=c(0,0), limits=xlims) +
+      scale_y_continuous(expand=c(0,0), limits=ylims) +
+      coord_fixed() +
+      theme(legend.position=c(.22, .33)) +
+      labs(fill = "inbound\nwind-analog\noverlap")
 
+p2 <- ggplot(dsdm, aes(x, y)) +
+      geom_raster(data=filter(dsdm, is.finite(land)), fill="gray80") +
+      geom_raster(data=filter(dsdm, is.finite(wind)), aes(fill=windsum)) +
+      geom_raster(data=filter(dsdm, is.finite(range)), fill="black") +
+      annotate(geom="text", x=xlims[1]+3, y=ylims[1]+3, label="b", size=8) +
+      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+      scale_x_continuous(expand=c(0,0), limits=xlims) +
+      scale_y_continuous(expand=c(0,0), limits=ylims) +
+      theme_void() +
+      coord_fixed() +
+      labs(fill=c("inbound\nwind\npressure")) +
+      theme(plot.title=element_text(hjust=.5),
+            legend.position=c(.22, .33))
 
-
-
-
-
-
-
+p <- arrangeGrob(p1, p2, nrow=1)
+ggsave("figures/manuscript/fig_5.png", p, width=9, height=3.2, units="in")
