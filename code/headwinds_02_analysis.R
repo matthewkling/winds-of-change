@@ -25,6 +25,8 @@ wm <- wa <- u
 wm[] <- w$magnitude
 wa[] <- w$azimuth
 
+stack(u, v, wm, wa) %>% writeRaster("data/geographic/processed/wind_uvma.tif")
+
 
 # climate change
 gradient <- function(x, component="x"){
