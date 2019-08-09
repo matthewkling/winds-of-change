@@ -127,7 +127,7 @@ for(prp in unique(d$property)){
                   plot.background = element_rect(fill="black"))
       ggsave(paste0("figures/windsheds/global/scatter_windshed_geography_bw_", 
                     sub("\\\n", "", prp), ".png"), 
-             width=12, height=7.25, units="in")
+             width=12, height=5, units="in")
 }
 
 
