@@ -121,7 +121,7 @@ land <- raster("f:/cfsr/land.tif") %>%
       rotate() %>% unwrap(180)
 
 # load windrose data
-rose <- stack("data/windrose/windrose_p1_2000s.tif") %>%
+rose <- stack("data/windrose/windrose_p1_1980_2009.tif") %>%
       rotate() %>% unwrap(180)
 
 # downweight conductance over water
@@ -133,7 +133,8 @@ rose <- land %>%
 climate <- stack("data/geographic/processed/temperature.tif") %>% unwrap(180)
 
 
-time_conv <- function(x) .995 ^ x
+#time_conv <- function(x) .995 ^ x
+time_conv <- function(x) 1 / x
 
 
 # function to convert wind cost values to flow values
@@ -166,13 +167,13 @@ d <- foreach(pts = pixels,
              .combine="rbind",
              .packages=(.packages())) %dopar% {
                    map2(pts$x, pts$y, possibly(woc, NULL), 
-                        windrose=rose, climate=climate, time_conv=time_conv, radius=500) %>%
+                        windrose=rose, climate=climate, time_conv=time_conv, radius=250) %>%
                          do.call("rbind", .) %>%
                          as.data.frame()
              }
 Sys.time() - start
 stopCluster(cl)
-write_csv(d, "data/windshed/p1_500km.csv")
+write_csv(d, "data/windshed/p1_30y_250km.csv")
 
 
 stop("wootwoot")
