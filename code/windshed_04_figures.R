@@ -507,11 +507,11 @@ for(drn in c("inbound", "outbound")){
       source("E:/edges/range-edges/code/utilities.r")
       ggs(paste0("figures/windsheds/global/windfill_clim_", drn, "_array.png"),
           p, width=12, height=12, units="in",
-          add = list(grid.text(letters[c(1,3)], 
+          add = list(grid.text(letters[1:2], 
                                x=c(.03, .03), 
                                y=c(.97, .47),
                                gp=gpar(fontsize=30, fontface="bold", col="black")),
-                     grid.text(letters[2], 
+                     grid.text(letters[3], 
                                x=c(.53), 
                                y=c(.97),
                                gp=gpar(fontsize=30, fontface="bold", col="white"))))
