@@ -357,78 +357,80 @@ ggsave("figures/manuscript/fig_s4.png", p, width=10, height=8, units="in")
 
 
 ### 3d surface with RGL 
-
-f <- read_csv(infile) %>%
-      select(-runtime) %>%
-      gather(var, value, -x, -y) %>%
-      separate(var, c("property", "direction", "moment", "stat"), sep="_") %>%
-      mutate(direction = ifelse(direction=="fwd", "outbound", "inbound"))
-
-d <- f %>%
-      filter(moment == "windshed",
-             stat == "size") %>%
-      spread(property, value) %>%
-      mutate(windfill = overlap / clim) %>%
-      gather(property, value, clim, wind, overlap, windfill)
-
-dd <- d %>%
-      select(-moment, -stat) %>%
-      spread(property, value) %>%
-      mutate(windfill = truncate(windfill)) %>%
+rglplots <- function(){
       
-      pal <- c("forestgreen", "yellow", "red", "darkblue")
-
-dd <- mutate(dd, color = colors2d(cbind(rank(dd$clim), 
-                                        rank(dd$windfill)), pal))
-
-ext <- extent(c(-160, -70, 0, 80))
-
-elev <- raster("F:/chelsa/elevation/mn30_grd/w001001.adf") %>% 
-      crop(ext) %>%
-      aggregate(3) %>%
-      focal(matrix(1, 5, 5), mean, na.rm=T)
-
-for(dir in unique(dd$direction)){
-      cst <- dd %>%
-            filter(x >= ext@xmin, x <= ext@xmax, y >= ext@ymin, y <= ext@ymax,
-                   direction==dir)
-      cst <- expand.grid(x=unique(cst$x), y=unique(cst$y)) %>%
-            left_join(cst) %>%
-            mutate(color=ifelse(is.na(color), "white", color)) %>%
-            arrange(-y, x)
+      f <- read_csv(infile) %>%
+            select(-runtime) %>%
+            gather(var, value, -x, -y) %>%
+            separate(var, c("property", "direction", "moment", "stat"), sep="_") %>%
+            mutate(direction = ifelse(direction=="fwd", "outbound", "inbound"))
       
-      dem <- stack("data/geographic/processed/elevation.tif") %>% crop(ext)
-      #wind_color <- matrix(cst$color, nrow=nrow(dem), byrow=T)
-      crgb <- col2rgb(cst$color)
+      d <- f %>%
+            filter(moment == "windshed",
+                   stat == "size") %>%
+            spread(property, value) %>%
+            mutate(windfill = overlap / clim) %>%
+            gather(property, value, clim, wind, overlap, windfill)
       
-      clr <- stack(dem, dem, dem)
-      clr[[1]][] <- crgb[1,]
-      clr[[2]][] <- crgb[2,]
-      clr[[3]][] <- crgb[3,]
-      clr <- resample(clr, elev)
-      clr <- trim(clr) %>% reclassify(c(-Inf, 0, 0, 255, Inf, 255))
-      elev <- crop(elev, clr)
+      dd <- d %>%
+            select(-moment, -stat) %>%
+            spread(property, value) %>%
+            mutate(windfill = truncate(windfill)) %>%
+            
+            pal <- c("forestgreen", "yellow", "red", "darkblue")
       
-      clr <- rgb(values(clr), maxColorValue = 255)
-      wind_color <- matrix(clr, nrow=nrow(elev), byrow=T) %>% t()
-      demm <- matrix(values(elev), nrow=nrow(elev), byrow=T) %>% t()
-      wind_color[demm<=0] <- "white"
+      dd <- mutate(dd, color = colors2d(cbind(rank(dd$clim), 
+                                              rank(dd$windfill)), pal))
       
-      z <- demm
-      x <- -1000 * (1:nrow(z))
-      y <- 1000 * (1:ncol(z))
+      ext <- extent(c(-160, -70, 0, 80))
       
-      library(rgl)
-      r3dDefaults$windowRect = c(0,0,1000, 1000)
-      open3d()
-      rgl.surface(x, -y, z*12, col=wind_color, shininess=128)
-      rgl.viewpoint(theta = 180, phi = 45, zoom=.17)
-      rgl.clear("lights")
-      light3d(phi=15, specular="gray60")
-      snapshot3d(paste0("figures/windsheds/rgl/persp", dir, ".png"))
-      rgl.quit()
+      elev <- raster("F:/chelsa/elevation/mn30_grd/w001001.adf") %>% 
+            crop(ext) %>%
+            aggregate(3) %>%
+            focal(matrix(1, 5, 5), mean, na.rm=T)
+      
+      for(dir in unique(dd$direction)){
+            cst <- dd %>%
+                  filter(x >= ext@xmin, x <= ext@xmax, y >= ext@ymin, y <= ext@ymax,
+                         direction==dir)
+            cst <- expand.grid(x=unique(cst$x), y=unique(cst$y)) %>%
+                  left_join(cst) %>%
+                  mutate(color=ifelse(is.na(color), "white", color)) %>%
+                  arrange(-y, x)
+            
+            dem <- stack("data/geographic/processed/elevation.tif") %>% crop(ext)
+            #wind_color <- matrix(cst$color, nrow=nrow(dem), byrow=T)
+            crgb <- col2rgb(cst$color)
+            
+            clr <- stack(dem, dem, dem)
+            clr[[1]][] <- crgb[1,]
+            clr[[2]][] <- crgb[2,]
+            clr[[3]][] <- crgb[3,]
+            clr <- resample(clr, elev)
+            clr <- trim(clr) %>% reclassify(c(-Inf, 0, 0, 255, Inf, 255))
+            elev <- crop(elev, clr)
+            
+            clr <- rgb(values(clr), maxColorValue = 255)
+            wind_color <- matrix(clr, nrow=nrow(elev), byrow=T) %>% t()
+            demm <- matrix(values(elev), nrow=nrow(elev), byrow=T) %>% t()
+            wind_color[demm<=0] <- "white"
+            
+            z <- demm
+            x <- -1000 * (1:nrow(z))
+            y <- 1000 * (1:ncol(z))
+            
+            library(rgl)
+            r3dDefaults$windowRect = c(0,0,1000, 1000)
+            open3d()
+            rgl.surface(x, -y, z*12, col=wind_color, shininess=128)
+            rgl.viewpoint(theta = 180, phi = 45, zoom=.17)
+            rgl.clear("lights")
+            light3d(phi=15, specular="gray60")
+            snapshot3d(paste0("figures/windsheds/rgl/persp", dir, ".png"))
+            rgl.quit()
+      }
 }
-
+rglplots()
 
 ### climate vs windfilling
 
@@ -489,12 +491,15 @@ for(drn in c("inbound", "outbound")){
       plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
       dev.off()
       
+      updown <- ifelse(drn=="outbound", "down", "up")
+      
       legend <- ggplot(dd, aes(clim, windfill)) +
             geom_point(color=dd$color2, size=.3) +
             theme_minimal() +
             theme(text=element_text(size = 15)) +
-            labs(x = "analog climate availability (outbound direction)\n",
-                 y = "\nwind-accessibility of analog area\n\n<--- hindrance --------------------------- facilitation --->")
+            labs(x = paste0("analog climate availability (", drn, " direction)\n"),
+                 y = paste0("\n", updown, 
+                            "wind-accessibility of analog area\n\n<--- hindrance --------------------------- facilitation --->"))
       
       library(png)
       img <- readPNG(paste0("figures/windsheds/rgl/persp", drn, ".png"))
