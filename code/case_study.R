@@ -4,6 +4,23 @@ library(raster)
 library(dismo)
 
 
+
+# custom windrose
+intdir <- "data/windrose/monthly_p1"
+f <- list.files(intdir, full.names=T)
+f <- f[grepl("05_|06_|07_", f)]
+years <- 30/4
+p <- 1
+outfile <- "data/case_study/windrose_p1_1980_2009_mayjunejuly.tif"
+f <- f %>% 
+      lapply(stack) %>%
+      Reduce("+", .) %>%
+      "/"(24 * 365 * years) %>% # number of hours
+      "^"(1/p) %>%
+      writeRaster(outfile, overwrite=T)
+
+
+
 stop("run the first parts of windshed_02_analysis")
 
 # species range data
@@ -38,7 +55,7 @@ gene <- function(sp){
       # prep wind conductance data
       land <- raster("f:/cfsr/land.tif") %>% 
             rotate()
-      rose <- stack("data/windrose/windrose_p2_2000s.tif") %>%
+      rose <- stack("data/case_study/windrose_p1_1980_2009_mayjunejuly.tif") %>%
             rotate()
       rose <- land %>%
             reclassify(c(NA, NA, .05)) %>% # weight of .1 makes it possible to cross narrow waterways
@@ -65,9 +82,9 @@ gene <- function(sp){
             
             # calculate wind catchment and climate analog surfaces
             s <- list(#wind_fwd = accCost(downtrans, origin),
-                      wind_rev = accCost(uptrans, origin),
-                      #clim_fwd = analogs(clim, coords, sigma=2), # sigma=2 inispired by Rehfeldt 1999
-                      clim_rev = analogs(clim, coords, sigma=2, reverse=T)) %>%
+                  wind_rev = accCost(uptrans, origin),
+                  #clim_fwd = analogs(clim, coords, sigma=2), # sigma=2 inispired by Rehfeldt 1999
+                  clim_rev = analogs(clim, coords, sigma=2, reverse=T)) %>%
                   stack()
             
             # modify wind values
@@ -125,7 +142,7 @@ gene <- function(sp){
              p, width=5, height=5, units="in")
       
       return(d)
-
+      
       # d$windfill_rev <- d$overlap_rev / d$clim_rev
       # 
       # d$color <- colormap::colors2d(cbind((d$clim_rev), rank(d$windfill_rev)),
@@ -240,23 +257,23 @@ sdm <- function(sp){
       pred1 <- predict(fit, fclim)
       
       # threshold the model
-      pres <- cbind(coordinates(rrange), values(stack(clim[[1]], rrange))) %>% 
-            as.data.frame() %>%
-            filter(is.finite(CHELSA_prec_1_V1.2_land))
-      eval <- evaluate(p = extract(clim, pres[is.finite(pres$layer), 1:2]),
-                       a = extract(clim, pres[is.na(pres$layer), 1:2]),
-                       model = fit)
-      #thresh <- threshold(eval, "kappa")
-      thresh <- threshold(eval, "spec_sens")
-      p0 <- reclassify(pred0, c(0, thresh, 0, thresh, 1, 1))
-      p1 <- reclassify(pred1, c(0, thresh, 0, thresh, 1, 1))
-      p0r <- reclassify(p0, c(-.5, .5, NA))
-      p1r <- reclassify(p1, c(-.5, .5, NA))
+      # pres <- cbind(coordinates(rrange), values(stack(clim[[1]], rrange))) %>% 
+      #       as.data.frame() %>%
+      #       filter(is.finite(CHELSA_prec_1_V1.2_land))
+      # eval <- evaluate(p = extract(clim, pres[is.finite(pres$layer), 1:2]),
+      #                  a = extract(clim, pres[is.na(pres$layer), 1:2]),
+      #                  model = fit)
+      # 
+      # thresh <- threshold(eval, "spec_sens")
+      # p0 <- reclassify(pred0, c(0, thresh, 0, thresh, 1, 1))
+      # p1 <- reclassify(pred1, c(0, thresh, 0, thresh, 1, 1))
+      # p0r <- reclassify(p0, c(-.5, .5, NA))
+      # p1r <- reclassify(p1, c(-.5, .5, NA))
       
       # prep wind conductance data
       land <- raster("f:/cfsr/land.tif") %>% 
             rotate()
-      rose <- stack("data/windrose/windrose_p2_2000s.tif") %>%
+      rose <- stack("data/windrose/windrose_p1_1980_2009.tif") %>%
             rotate()
       
       # downweight conductance over water
@@ -267,9 +284,9 @@ sdm <- function(sp){
       land <- crop(land, rrange)
       
       # downweight conductance over unsuitable territory
-      rose <- max(p0r, p1r, na.rm=T) %>%
-            reclassify(c(NA, NA, .25)) %>% 
-            "*"(rose)
+      #rose <- max(p0r, p1r, na.rm=T) %>%
+      #      reclassify(c(NA, NA, .25)) %>% 
+      #      "*"(rose)
       
       wind <- rose %>% add_coords() 
       downtrans <- wind %>% transition_stack(windflow, directions=8, symm=F, direction="downwind")
@@ -278,25 +295,25 @@ sdm <- function(sp){
       # wind accessibility of future suitable area from current range
       xy <- rasterToPoints(rrange)[,1:2]
       cost <- accCost(downtrans, xy) %>%
-            mask(p1r)
+            mask(clim[[1]])
       
       # sum of accessibility from every location in range
       ccost <- cost
       ccost[] <- 0
       for(i in 1:nrow(xy)) ccost <- ccost + 1/accCost(downtrans, xy[i,])
-      ccost <- mask(ccost, p1r)
+      ccost <- mask(ccost, clim[[1]])
       
       
       # geographic distance
-      dst <- distance(crop(rrange, trim(p1r)))
-      dst <- extend(dst, rrange)
-      
+      # dst <- distance(crop(rrange, trim(p1r)))
+      # dst <- extend(dst, rrange)
+      dst <- distance(rrange)
       
       # plot
       pn <- pmin(as.vector(extent(trim(rrange))),
-                 as.vector(extent(trim(p1r))))
+                 as.vector(extent(trim(clim[[1]]))))
       px <- pmax(as.vector(extent(trim(rrange))),
-                 as.vector(extent(trim(p1r))))
+                 as.vector(extent(trim(clim[[1]]))))
       plot_ext <- extent(pn[1], px[2], pn[3], px[4]) * 1.5
       
       unocc <- reclassify(rrange, c(NA, NA, 1, 0, 2, NA))
@@ -304,12 +321,12 @@ sdm <- function(sp){
       ccost <- mask(ccost, unocc)
       dst <- mask(dst, unocc)
       
-      d <- stack(clim[[1]], cost*1000, ccost, rrange, dst) %>%
+      d <- stack(clim[[1]], cost*1000, ccost, rrange, pred1, dst) %>%
             mask(land) %>%
             crop(plot_ext) %>%
             rasterToPoints() %>%
             as.data.frame()
-      names(d)[3:7] <- c("land", "wind", "windsum", "range", "distance")
+      names(d)[3:ncol(d)] <- c("land", "wind", "windsum", "range", "suit1", "distance")
       d <- mutate(d, range = ifelse(range==0, NA, range))
       
       p <- ggplot(d, aes(x, y)) +
@@ -341,8 +358,8 @@ sdm <- function(sp){
 
 
 
-map(basename(spdirs[grepl("Abies|Acer|Betula|Fraxinus|Pinus|Picea|Populus|Ulmus", spdirs)]),
-    possibly(sdm, NULL))
+#map(basename(spdirs[grepl("Abies|Acer|Betula|Fraxinus|Pinus|Picea|Populus|Ulmus", spdirs)]),
+#    possibly(sdm, NULL))
 
 
 ###########
@@ -359,7 +376,7 @@ ylims <- c(range(dgene$y) + c(0, 3))
 
 
 p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
-      geom_raster(data=filter(dsdm, is.finite(land)), fill="gray80") +
+      geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
       geom_raster() +
       annotate(geom="text", x=xlims[1]+3, y=ylims[1]+3, label="a", size=8) +
       scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
@@ -371,9 +388,9 @@ p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
       labs(fill = "inbound\nwind-analog\noverlap")
 
 p2 <- ggplot(dsdm, aes(x, y)) +
-      geom_raster(data=filter(dsdm, is.finite(land)), fill="gray80") +
-      geom_raster(data=filter(dsdm, is.finite(wind)), aes(fill=windsum)) +
-      geom_raster(data=filter(dsdm, is.finite(range)), fill="black") +
+      geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
+      geom_raster(data=filter(dsdm, is.finite(wind)), aes(fill=windsum*suit1)) +
+      #geom_raster(data=filter(dsdm, is.finite(range)), fill="black") +
       annotate(geom="text", x=xlims[1]+3, y=ylims[1]+3, label="b", size=8) +
       scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
       scale_x_continuous(expand=c(0,0), limits=xlims) +
@@ -384,5 +401,100 @@ p2 <- ggplot(dsdm, aes(x, y)) +
       theme(plot.title=element_text(hjust=.5),
             legend.position=c(.22, .33))
 
-p <- arrangeGrob(p1, p2, nrow=1)
-ggsave("figures/manuscript/fig_5.png", p, width=9, height=3.2, units="in")
+#p <- arrangeGrob(p1, p2, nrow=1)
+#ggsave("figures/manuscript/fig_5.png", p, width=9, height=3.2, units="in")
+
+###
+
+
+
+
+
+p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
+      geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
+      geom_raster() +
+      annotate(geom="text", x=xlims[1]+2, y=ylims[1]+2, 
+               size=6, lineheight=.75, hjust=0, vjust=0,
+               label="genetic\nrescue") +
+      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+      theme_void() +
+      scale_x_continuous(expand=c(0,0), limits=xlims) +
+      scale_y_continuous(expand=c(0,0), limits=ylims) +
+      coord_fixed() +
+      theme(legend.position="none")
+
+p2 <- ggplot(dsdm, aes(x, y)) +
+      geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
+      geom_raster(data=filter(dsdm, is.finite(wind)), aes(fill=windsum*suit1)) +
+      annotate(geom="text", x=xlims[1]+2, y=ylims[1]+2, 
+               size=6, lineheight=.75, hjust=0, vjust=0,
+               label="range\nexpansion") +
+      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+      scale_x_continuous(expand=c(0,0), limits=xlims) +
+      scale_y_continuous(expand=c(0,0), limits=ylims) +
+      theme_void() +
+      coord_fixed() +
+      theme(plot.title=element_text(hjust=.5),
+            legend.position="none")
+
+
+dx <- dsdm %>%
+      select(-wind, -range, -distance) %>%
+      filter(!is.na(windsum),
+             x >= min(xlims), x <= max(xlims),
+             y >= min(ylims), y <= max(ylims)) %>%
+      mutate(windsum = log10(windsum)) %>%
+      gather(stat, value, windsum, suit1) %>%
+      mutate(stat = factor(stat, levels=c("suit1", "windsum"))) %>%
+      group_by(stat) %>% 
+      mutate(value = scales::rescale(value))
+
+dxt <- data.frame(x=min(dx$x), y=min(dx$y),
+                  stat = c("suit1", "windsum"),
+                  label=c("future\nsuitability", "wind\nshadow"))
+
+p2c <- ggplot(dx, aes(x, y)) +
+      geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
+      geom_raster(data=dx, aes(fill=value)) +
+      geom_text(data=dxt, aes(x, y, label=label),
+                nudge_x = 5, nudge_y = 5, hjust=0, lineheight=.75) +
+      facet_wrap(~stat) +
+      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+      scale_x_continuous(expand=c(0,0), limits=xlims) +
+      scale_y_continuous(expand=c(0,0), limits=ylims) +
+      theme_void() +
+      coord_fixed() +
+      theme(legend.position="none",
+            strip.text=element_blank())
+
+dx1 <- dgene %>%
+      select(-overlap_rev) %>%
+      gather(stat, value, wind_rev, clim_rev) %>%
+      group_by(stat) %>% 
+      mutate(value = scales::rescale(value))
+   
+
+dxt1 <- data.frame(x=min(dx$x), y=min(dx$y),
+                  stat = c("clim_rev", "wind_rev"),
+                  label=c("analog\navailability", "wind\nshadow"))
+
+p1c <- ggplot(dx1, aes(x, y)) +
+      geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
+      geom_raster(data=dx1, aes(fill=value)) +
+      geom_text(data=dxt1, aes(x, y, label=label),
+                nudge_x = 5, nudge_y = 5, hjust=0, lineheight=.75) +
+      facet_wrap(~stat) +
+      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+      scale_x_continuous(expand=c(0,0), limits=xlims) +
+      scale_y_continuous(expand=c(0,0), limits=ylims) +
+      theme_void() +
+      coord_fixed() +
+      theme(legend.position="none",
+            strip.text=element_blank())
+
+
+pa <- arrangeGrob(p1c, p2c, nrow=1)
+pb <- arrangeGrob(p1, p2, nrow=1)
+p <- arrangeGrob(pb, pa, ncol=1, heights = c(2, 1))
+ggsave("figures/manuscript/fig_5.png", p, width=9, height=4.8, units="in")
+
