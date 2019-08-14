@@ -20,6 +20,20 @@ f <- f %>%
       writeRaster(outfile, overwrite=T)
 
 
+# custom windrose
+intdir <- "data/windrose/monthly_p1"
+f <- list.files(intdir, full.names=T)
+f <- f[grepl("09_|10_|11_", f)]
+years <- 30/4
+p <- 1
+outfile <- "data/case_study/windrose_p1_1980_2009_septoctnov.tif"
+f <- f %>% 
+      lapply(stack) %>%
+      Reduce("+", .) %>%
+      "/"(24 * 365 * years) %>% # number of hours
+      "^"(1/p) %>%
+      writeRaster(outfile, overwrite=T)
+
 
 stop("run the first parts of windshed_02_analysis")
 
@@ -273,7 +287,7 @@ sdm <- function(sp){
       # prep wind conductance data
       land <- raster("f:/cfsr/land.tif") %>% 
             rotate()
-      rose <- stack("data/windrose/windrose_p1_1980_2009.tif") %>%
+      rose <- stack("data/case_study/windrose_p1_1980_2009_septoctnov.tif") %>%
             rotate()
       
       # downweight conductance over water
@@ -472,11 +486,11 @@ dx1 <- dgene %>%
       gather(stat, value, wind_rev, clim_rev) %>%
       group_by(stat) %>% 
       mutate(value = scales::rescale(value))
-   
+
 
 dxt1 <- data.frame(x=min(dx$x), y=min(dx$y),
-                  stat = c("clim_rev", "wind_rev"),
-                  label=c("analog\navailability", "wind\nshadow"))
+                   stat = c("clim_rev", "wind_rev"),
+                   label=c("analog\navailability", "wind\nshadow"))
 
 p1c <- ggplot(dx1, aes(x, y)) +
       geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
@@ -497,4 +511,3 @@ pa <- arrangeGrob(p1c, p2c, nrow=1)
 pb <- arrangeGrob(p1, p2, nrow=1)
 p <- arrangeGrob(pb, pa, ncol=1, heights = c(2, 1))
 ggsave("figures/manuscript/fig_5.png", p, width=9, height=4.8, units="in")
-
