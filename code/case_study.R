@@ -389,46 +389,12 @@ xlims <- c(range(dsdm$x) + c(0, -7))
 ylims <- c(range(dgene$y) + c(0, 3))
 
 
-p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
-      geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
-      geom_raster() +
-      annotate(geom="text", x=xlims[1]+3, y=ylims[1]+3, label="a", size=8) +
-      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
-      theme_void() +
-      scale_x_continuous(expand=c(0,0), limits=xlims) +
-      scale_y_continuous(expand=c(0,0), limits=ylims) +
-      coord_fixed() +
-      theme(legend.position=c(.22, .33)) +
-      labs(fill = "inbound\nwind-analog\noverlap")
-
-p2 <- ggplot(dsdm, aes(x, y)) +
-      geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
-      geom_raster(data=filter(dsdm, is.finite(wind)), aes(fill=windsum*suit1)) +
-      #geom_raster(data=filter(dsdm, is.finite(range)), fill="black") +
-      annotate(geom="text", x=xlims[1]+3, y=ylims[1]+3, label="b", size=8) +
-      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
-      scale_x_continuous(expand=c(0,0), limits=xlims) +
-      scale_y_continuous(expand=c(0,0), limits=ylims) +
-      theme_void() +
-      coord_fixed() +
-      labs(fill=c("inbound\nwind\npressure")) +
-      theme(plot.title=element_text(hjust=.5),
-            legend.position=c(.22, .33))
-
-#p <- arrangeGrob(p1, p2, nrow=1)
-#ggsave("figures/manuscript/fig_5.png", p, width=9, height=3.2, units="in")
-
-###
-
-
-
-
 
 p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
       geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
       geom_raster() +
-      annotate(geom="text", x=xlims[1]+2, y=ylims[1]+2, 
-               size=6, lineheight=.75, hjust=0, vjust=0,
+      annotate(geom="text", x=xlims[1]+4, y=ylims[1]+1.5, 
+               size=4, lineheight=.75, hjust=0, vjust=0,
                label="genetic\nrescue") +
       scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
       theme_void() +
@@ -440,8 +406,8 @@ p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
 p2 <- ggplot(dsdm, aes(x, y)) +
       geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
       geom_raster(data=filter(dsdm, is.finite(wind)), aes(fill=windsum*suit1)) +
-      annotate(geom="text", x=xlims[1]+2, y=ylims[1]+2, 
-               size=6, lineheight=.75, hjust=0, vjust=0,
+      annotate(geom="text", x=xlims[1]+4, y=ylims[1]+1.5, 
+               size=4, lineheight=.75, hjust=0, vjust=0,
                label="range\nexpansion") +
       scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
       scale_x_continuous(expand=c(0,0), limits=xlims) +
@@ -471,7 +437,7 @@ p2c <- ggplot(dx, aes(x, y)) +
       geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
       geom_raster(data=dx, aes(fill=value)) +
       geom_text(data=dxt, aes(x, y, label=label),
-                nudge_x = 5, nudge_y = 5, hjust=0, lineheight=.75) +
+                nudge_x = 8, nudge_y = 6, hjust=0, lineheight=.75) +
       facet_wrap(~stat) +
       scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
       scale_x_continuous(expand=c(0,0), limits=xlims) +
@@ -496,7 +462,7 @@ p1c <- ggplot(dx1, aes(x, y)) +
       geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
       geom_raster(data=dx1, aes(fill=value)) +
       geom_text(data=dxt1, aes(x, y, label=label),
-                nudge_x = 5, nudge_y = 5, hjust=0, lineheight=.75) +
+                nudge_x = 8, nudge_y = 6, hjust=0, lineheight=.75) +
       facet_wrap(~stat) +
       scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
       scale_x_continuous(expand=c(0,0), limits=xlims) +
@@ -510,4 +476,12 @@ p1c <- ggplot(dx1, aes(x, y)) +
 pa <- arrangeGrob(p1c, p2c, nrow=1)
 pb <- arrangeGrob(p1, p2, nrow=1)
 p <- arrangeGrob(pb, pa, ncol=1, heights = c(2, 1))
-ggsave("figures/manuscript/fig_5.png", p, width=9, height=4.8, units="in")
+
+source("E:/edges/range-edges/code/utilities.r")
+ggs("figures/manuscript/fig_5.png", p, width=9, height=4.8, units="in",
+    add = grid.text(letters[1:6], 
+                    x=c(0, 0, .25, .5, .5, .75) + .02, 
+                    y=c(.33, 0, 0, .33, 0, 0) + .06,
+                    gp=gpar(fontsize=20, fontface="bold", col="black")))
+
+
