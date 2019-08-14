@@ -227,6 +227,7 @@ d <- d %>%
       mutate(ymax = max(clim0) + .1 * diff(range(clim0, na.rm=T)),
              i = as.integer(id),
              idi = paste0(i, ": ", id),
+             idi2 = paste0("(", letters[i+2], ") ", id),
              scalar = diff(range(clim0, na.rm=T)) / max(abs(uwind), na.rm=T) / 5 ,
              yend = ifelse(aligned==FALSE, clim0 + uwind * scalar, clim0 - uwind * scalar),
              ymax = ifelse(ymax > yend, ymax, yend),
@@ -239,7 +240,7 @@ de <- d %>% group_by(idi) %>% arrange(desc(dst)) %>% slice(1)
 ynudge <- 0
 arw <- arrow(type="closed", angle=15, length = unit(0.1, "in"))
 p <- ggplot(d) +
-      facet_wrap(~idi, scales="free") +
+      facet_wrap(~id, scales="free") +
       geom_ribbon(aes(dst, ymin=clim0, ymax=ymax), 
                   stat="identity", fill="gray90") +
       #geom_point(aes(dst, clim0, color=aligned), size=2) +
@@ -316,7 +317,7 @@ map <- ggplot() +
       geom_point(data=dp %>% filter(! i %in% 1:2), aes(x, y), color="black") +
       geom_point(data=de %>% filter(! i %in% 1:2), aes(x, y), color="black", fill="white", shape=21) +
       geom_text(data=dp %>% filter(! i %in% 1:2), 
-                aes(x, y-7, label=i), color="black", size=4) +
+                aes(x, y-7, label=letters[i+2]), color="black", size=4) +
       
       annotate(geom="segment", size=sz, x=x1, y=y1, 
                xend=x0 + dx * (r0 / dh), 
@@ -332,7 +333,7 @@ map <- ggplot() +
                 color="black", size=sz) +
       geom_point(data=dp_circ, aes(x, y), color="black") +
       geom_point(data=de_circ, aes(x, y), color="black", fill="white", shape=21) +
-      geom_text(data=dp_circ, aes(x, y-7, label=i), color="black", size=4) +
+      geom_text(data=dp_circ, aes(x, y-7, label=letters[i+2]), color="black", size=4) +
       
       
       
@@ -419,6 +420,7 @@ latitude <- ggplot(vs %>% filter(land=="land")) +
       #geom_point(aes(x=lat, y=temp, color = aligned_temp), size=1.5) +
       geom_text(data=bands, aes(x=(x0+x1)/2, y=mn, label=name), 
                 hjust=.5, nudge_y=-8, lineheight=.7, size=3) +
+      #annotate(geom="text", x=75, y=28, label="b", size=5) +
       scale_color_manual(values=c("red", "forestgreen"), drop=F)  +
       scale_fill_manual(values=c("red", "forestgreen"), drop=F)  +
       scale_x_continuous(breaks=xb, limits=c(-90, 90), expand=c(0,0),
@@ -433,8 +435,25 @@ latitude <- ggplot(vs %>% filter(land=="land")) +
 
 pc <- arrangeGrob(map, latitude, nrow=1, widths=c(1.5, 1))
 pc <- arrangeGrob(pc, p, ncol=1, heights=c(1, 4/3))
+
+
+source("E:/edges/range-edges/code/utilities.r")
+ggs("figures/manuscript/fig_2.png", pc, width=9, height=7, units="in", 
+    add=grid.text(letters[1:8], 
+                  x=c(.05, .63,
+                      .05, .05, 
+                      .37, .37, 
+                      .69, .69), 
+                  y=c(.965, .965,
+                      .54, .27, 
+                      .54, .27, 
+                      .54, .27),
+                  gp=gpar(fontsize=20, fontface="bold", col="black")))
+
 ggsave("figures/transects/transects.png", pc, width=9, height=7, units="in")
-ggsave("figures/manuscript/fig_2.png", pc, width=9, height=7, units="in")
+
+
+
 
 
 darkness <- theme(plot.background = element_rect(fill="black", color="black"),
@@ -444,8 +463,8 @@ darkness <- theme(plot.background = element_rect(fill="black", color="black"),
 
 pc <- arrangeGrob(map + darkness + 
                         theme(axis.text = element_text(color="black"),
-                                         axis.title = element_text(color="black"),
-                                         axis.ticks = element_line(color="black")), 
+                              axis.title = element_text(color="black"),
+                              axis.ticks = element_line(color="black")), 
                   latitude + darkness + 
                         theme(panel.background = element_rect(fill="white")), 
                   nrow=1, widths=c(1.5, 1))
