@@ -23,29 +23,33 @@ land <- raster("f:/cfsr/land.tif") %>%
 #to_equal_area(method="ngb")
 
 if(F){
-      windrose <- stack("data/roses_force/cfsr_climatology/roses_cfsr_2000s.tif") %>%
+      windrose <- stack("data/windrose/windrose_p1_1980_2009.tif") %>%
             rotate() %>%
             #to_equal_area() %>%
             mask(land)
       
       # summarize
-      strength <- sum(windrose
-      writeRaster(strength, "data/geographic/processed/strength.tif")
+      strength <- sum(windrose) / 8
+      writeRaster(strength, "data/geographic/processed/strength.tif", overwrite=T)
+      
       
       direct <- calc(windrose, function(x) circ_sd(windrose_bearings(), x))
       direction <- direct$bearing
-      writeRaster(direction, "data/geographic/processed/direction.tif")
+      writeRaster(direction, "data/geographic/processed/direction.tif", overwrite=T)
       
-      directionality <- calc(windrose, function(x) anisotropy(windrose_bearings(), x),
-                             filename="data/geographic/processed/directionality.tif")
+      #directionality <- calc(windrose, function(x) anisotropy(windrose_bearings(), x),
+      #                       filename="data/geographic/processed/directionality.tif")
       
       #dir2 <- calc(windrose, Gini) # Gini: 1 = directionality, 0 = equality
-      #sd <- direct$iso
+      anisotropy <- 1 - direct$iso
+      writeRaster(anisotropy, "data/geographic/processed/anisotropy.tif")
+      
       #pairs(stack(directionality, dir2, sd))
 }
 strength <- raster("data/geographic/processed/strength.tif")
 direction <- raster("data/geographic/processed/direction.tif")
-directionality <- raster("data/geographic/processed/directionality.tif")
+#directionality <- raster("data/geographic/processed/directionality.tif")
+anisotropy <- raster("data/geographic/processed/anisotropy.tif")
 
 elev <- raster("data/geographic/processed/elevation.tif")
 coast <- raster("data/geographic/processed/coastal_distance.tif")
