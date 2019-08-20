@@ -10,6 +10,7 @@ f <- read_csv("data/windshed/p1_30y_250km.csv") %>%
 ff <- filter(f, abs(y) < 45)
 
 i <- sample(1:nrow(ff), 1)
+saveRDS(i, "data/windshed/example_landscape_index.rds")
 
 r <- woc(ff$x[i], ff$y[i], windrose=rose, climate=climate,
          radius = 1000, time_conv=time_conv,
