@@ -41,9 +41,9 @@ d <- d0 %>%
              value = scales::rescale(value)) %>%
       ungroup() %>%
       mutate(stat = factor(stat, 
-                           levels=c("windr", "wind", "clim", "overlap"),
-                           labels=c("wind time", "wind accessibility", 
-                                    "climate similarity", "wind-climate overlap")),
+                           levels=c("clim", "windr", "wind", "overlap"),
+                           labels=c("climate similarity", "wind time", "wind accessibility", 
+                                    "wind-climate overlap")),
              direction = factor(direction,
                                 levels = c("fwd", "rev"),
                                 labels = c("outbound direction", "inbound direction")))
@@ -65,28 +65,29 @@ maps <- ggplot() +
 
 
 library(lemon)
+
 legend1 <- d0 %>% 
-      ggplot(aes(x, y, fill=windr_fwd)) + geom_raster() +
-      theme_void() + theme(legend.position="bottom", legend.title = element_text(size=10)) + 
-      scale_fill_viridis_c(limits=c(0, max(c(d0$windr_fwd, d0$windr_rev))), breaks=c(0, 500, 1000)) +
-      guides(fill = guide_colourbar(barwidth=5, barheight=.5, title.position="top", title.hjust = 0.5)) +
-      labs(fill = "wind time (h)")
-legend1 <- g_legend(legend1)
-
-legend2 <- d0 %>% 
-      ggplot(aes(x, y, fill=wind_fwd)) + geom_raster() +
-      theme_void() + theme(legend.position="bottom", legend.title = element_text(size=10)) + 
-      scale_fill_viridis_c(limits=0:1, breaks=c(0, .5, 1)) +
-      guides(fill = guide_colourbar(barwidth=5, barheight=.5, title.position="top", title.hjust = 0.5)) +
-      labs(fill = "wind accessibility")
-legend2 <- g_legend(legend2)
-
-legend3 <- d0 %>% 
       ggplot(aes(x, y, fill=clim_fwd)) + geom_raster() +
       theme_void() + theme(legend.position="bottom", legend.title = element_text(size=10)) + 
       scale_fill_viridis_c(limits=0:1, breaks=c(0, .5, 1)) +
       guides(fill = guide_colourbar(barwidth=5, barheight=.5, title.position="top", title.hjust = 0.5)) +
       labs(fill = "climate similarity")
+legend1 <- g_legend(legend1)
+
+legend2 <- d0 %>% 
+      ggplot(aes(x, y, fill=windr_fwd)) + geom_raster() +
+      theme_void() + theme(legend.position="bottom", legend.title = element_text(size=10)) + 
+      scale_fill_viridis_c(limits=c(0, max(c(d0$windr_fwd, d0$windr_rev))), breaks=c(0, 500, 1000)) +
+      guides(fill = guide_colourbar(barwidth=5, barheight=.5, title.position="top", title.hjust = 0.5)) +
+      labs(fill = "wind time (h)")
+legend2 <- g_legend(legend2)
+
+legend3 <- d0 %>% 
+      ggplot(aes(x, y, fill=wind_fwd)) + geom_raster() +
+      theme_void() + theme(legend.position="bottom", legend.title = element_text(size=10)) + 
+      scale_fill_viridis_c(limits=0:1, breaks=c(0, .5, 1)) +
+      guides(fill = guide_colourbar(barwidth=5, barheight=.5, title.position="top", title.hjust = 0.5)) +
+      labs(fill = "wind accessibility")
 legend3 <- g_legend(legend3)
 
 legend4 <- d0 %>% 
@@ -152,6 +153,9 @@ ggs("figures/manuscript/fig_3.png", p, width=8.5, height=4, units="in",
                   x=rep(seq(.02, .82, length.out=5), each=2), 
                   y=rep(c(.8, .37), 5),
                   gp=gpar(fontsize=12, fontface="bold", col="black")))
+
+
+
 
 ###########################
 
