@@ -10,10 +10,11 @@ f <- read_csv("data/windshed/p1_30y_250km.csv") %>%
 ff <- filter(f, abs(y) < 45)
 
 i <- sample(1:nrow(ff), 1)
-saveRDS(i, "data/windshed/example_landscape_index.rds")
+#saveRDS(i, "data/windshed/example_landscape_index.rds")
+i <- readRDS("data/windshed/example_landscape_index.rds")
 
 r <- woc(ff$x[i], ff$y[i], windrose=rose, climate=climate,
-         radius = 1000, time_conv=time_conv,
+         radius = 500, time_conv=time_conv,
          sigma = 2,
          output = "rasters")
 
@@ -26,18 +27,19 @@ d0 <-  r %>%
       filter(is.finite(wind_fwd)) %>%
       mutate(windr_fwd = 1/wind_fwd,
              windr_rev = 1/wind_rev,
-             wind_fwd = base ^ (1/wind_fwd),
-             wind_rev = base ^ (1/wind_rev),
+             #wind_fwd = sqrt(wind_fwd),
+             #wind_rev = (wind_rev),
              overlap_fwd = clim_fwd * wind_fwd,
-             overlap_rev = clim_rev * wind_rev) 
+             overlap_rev = clim_rev * wind_rev)# %>%
+      #mutate_at(vars(wind_fwd, wind_rev, overlap_fwd, overlap_rev), sqrt)
 d <- d0 %>%
       gather(stat, value, -x, -y) %>%
       separate(stat, c("stat", "direction")) %>%
-      mutate(stat2 = case_when(stat=="windr" ~ "windr",
-                               stat=="clim" ~ "clim",
-                               TRUE ~ "wind")) %>%
-      group_by(stat2) %>%
-      #group_by(stat) %>%
+      # mutate(stat2 = case_when(stat=="windr" ~ "windr",
+      #                          stat=="clim" ~ "clim",
+      #                          TRUE ~ "wind")) %>%
+      # group_by(stat2) %>%
+      group_by(stat) %>%
       mutate(#value = ifelse(stat %in% c("clim", "windr"), value, log(value)),
              value = scales::rescale(value)) %>%
       ungroup() %>%
@@ -49,15 +51,16 @@ d <- d0 %>%
                                 levels = c("fwd", "rev"),
                                 labels = c("outbound direction", "inbound direction")))
 
-
+pointsize <- 2
 maps <- ggplot() +
       geom_raster(data=d, aes(x, y, fill=value)) +
       geom_point(data=ff[i,c("x", "y")], 
-                 aes(x, y), color="red", size=1) +
+                 aes(x, y), color="red", size=pointsize) +
       facet_grid(direction ~ stat#, switch="y"
                  ) + 
       theme_void() +
       scale_fill_viridis_c() +
+      #scale_fill_gradientn(colors=viridis::viridis_pal()(6)[c(1:6,6,6)]) +
       theme(legend.position="none",
             strip.text.y=element_text(angle=-90, size=10),
             strip.text.x=element_blank())# +
@@ -113,7 +116,7 @@ key <- ggplot() +
                    fill="gray30") +
       geom_polygon(data=fortify(circle), aes(long, lat, group=group), fill="dodgerblue") +
       geom_point(data=ff[i,c("x", "y")], 
-                 aes(x, y), color="red", size=1) +
+                 aes(x, y), color="red", size=pointsize) +
       coord_map(projection="ortho", 
                 orientation=c(ff[i, "y"], ff[i, "x"], 0)) +
       scale_x_continuous(breaks=seq(-180, 180, 20)) +
@@ -130,7 +133,7 @@ td <- climate[[1]] %>%
 temp <- ggplot() +
       geom_raster(data=td, aes(x, y, fill=layer.1)) +
       geom_point(data=ff[i,c("x", "y")], 
-                 aes(x, y), color="red", size=1) +
+                 aes(x, y), color="red", size=pointsize) +
       scale_fill_gradientn(colors=c("dodgerblue", "blue", "purple", "red", "yellow")) +
       theme_void() +
       theme_void() + theme(legend.position="top", legend.title = element_text(size=10)) + 
@@ -139,7 +142,7 @@ temp <- ggplot() +
 temp_legend <- g_legend(temp)
 temp <- temp + theme(legend.position="none")
 
-blank <- r <- rectGrob(gp=gpar(fill="white", col="white"))
+blank <- rectGrob(gp=gpar(fill="white", col="white"))
 
 legends <- arrangeGrob(legend1, legend2, legend3, legend4, blank, nrow=1, widths=c(1, 1, 1, 1, .01))
 main <- arrangeGrob(legends, maps, nrow=2, heights=c(1.25, 6))
