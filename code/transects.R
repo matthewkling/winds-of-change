@@ -222,12 +222,14 @@ d <- lapply(d, function(x) x$data) %>%
       bind_rows() %>%
       mutate(id=factor(id, levels=labels))
 
+plett <- c("c", "e", "g", "d", "f", "h")
+
 d <- d %>%
       group_by(id) %>%
       mutate(ymax = max(clim0) + .1 * diff(range(clim0, na.rm=T)),
              i = as.integer(id),
              idi = paste0(i, ": ", id),
-             idi2 = paste0("(", letters[i+2], ") ", id),
+             idi2 = paste0("(", plett[i], ") ", id),
              scalar = diff(range(clim0, na.rm=T)) / max(abs(uwind), na.rm=T) / 5 ,
              yend = ifelse(aligned==FALSE, clim0 + uwind * scalar, clim0 - uwind * scalar),
              ymax = ifelse(ymax > yend, ymax, yend),
@@ -317,7 +319,7 @@ map <- ggplot() +
       geom_point(data=dp %>% filter(! i %in% 1:2), aes(x, y), color="black") +
       geom_point(data=de %>% filter(! i %in% 1:2), aes(x, y), color="black", fill="white", shape=21) +
       geom_text(data=dp %>% filter(! i %in% 1:2), 
-                aes(x, y-7, label=letters[i+2]), color="black", size=4) +
+                aes(x, y-7, label=plett[i]), color="black", size=4) +
       
       annotate(geom="segment", size=sz, x=x1, y=y1, 
                xend=x0 + dx * (r0 / dh), 
@@ -333,7 +335,7 @@ map <- ggplot() +
                 color="black", size=sz) +
       geom_point(data=dp_circ, aes(x, y), color="black") +
       geom_point(data=de_circ, aes(x, y), color="black", fill="white", shape=21) +
-      geom_text(data=dp_circ, aes(x, y-7, label=letters[i+2]), color="black", size=4) +
+      geom_text(data=dp_circ, aes(x, y-7, label=plett[i]), color="black", size=4) +
       
       
       
