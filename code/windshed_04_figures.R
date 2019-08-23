@@ -19,6 +19,8 @@ select <- dplyr::select
 
 
 infile <- "data/windshed/p1_30y_250km.csv"
+#infile <- "data/windshed/p1_30y_250km_exp995.csv"
+#infile <- "data/windshed/p1_30y_250km_exp99.csv"
 
 
 
@@ -100,6 +102,55 @@ p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill") %>%
 ggsave("figures/windsheds/global/scatter_windshed_geography_bw.png", 
        width=12, height=8, units="in")
 
+if(F){
+      library(mgcv)
+      png("figures/windsheds/global/gams.png", width=2000, height=1000)
+      par(mfrow=c(2, 4))
+      for(drn in c("inbound", "outbound")){
+            for(prp in unique(d$property)){
+                  pd <- d %>%# sample_n(200000) %>% 
+                        filter(property == prp,
+                               direction == drn) %>%
+                        #filter(x < -20, y > 20) %>%
+                        spread(attr, coord) %>%
+                        mutate(elevation = as.vector(scale(log(elevation + 1))),
+                               continentality = as.vector(scale(log(continentality + 1))),
+                               value=rank(value))
+                  
+                  fit <- gam(value ~ s(elevation) + s(continentality) + s(x) + s(y), data=pd)
+                  #fit <- gam(value ~ elevation + continentality + s(x) + s(y), data=pd)
+                  vis.gam(fit, theta=220, main=paste(drn, sub("\n", " ", prp)),
+                          zlim=range(pd$value, na.rm=T))
+            }
+      }
+      dev.off()
+      
+      png("figures/windsheds/global/gams_lat_elev.png", width=2000, height=1000)
+      par(mfrow=c(2, 4))
+      for(drn in c("inbound", "outbound")){
+            for(prp in unique(d$property)){
+                  pd <- d %>%# sample_n(200000) %>% 
+                        filter(property == prp,
+                               direction == drn) %>%
+                        #filter(x < -20, y > 20) %>%
+                        spread(attr, coord) %>%
+                        mutate(elevation = as.vector(scale(log(elevation + 1))),
+                               continentality = as.vector(scale(log(continentality + 1))),
+                               value=rank(value))
+                  
+                  fit <- gam(value ~ s(elevation) + s(continentality) + s(x) + s(y), data=pd)
+                  #fit <- gam(value ~ elevation + continentality + s(x) + s(y), data=pd)
+                  vis.gam(fit, c("y", "elevation"), theta=130, phi=25, 
+                          main=paste(drn, sub("\n", " ", prp)),
+                          zlim=range(pd$value, na.rm=T))
+                  
+                  fit <- gam(value ~ te(x, y) + s(elevation, continentality), 
+                             data=pd %>% sample_n(5000))
+                  vis.gam(fit, c("continentality", "elevation"), theta=130)
+            }
+      }
+      dev.off()
+}
 
 for(prp in unique(d$property)){
       
@@ -125,11 +176,11 @@ for(prp in unique(d$property)){
                   axis.text=element_text(size=15, color="white"),
                   legend.title=element_blank(),
                   plot.background = element_rect(fill="black"))
-      ggsave(paste0("figures/windsheds/global/scatter_windshed_geography_bw_", 
-                    sub("\\\n", "", prp), ".png"), 
+      ggsave(paste0("figures/windsheds/global/scatter_windshed_geography_bw_",
+                    sub("\\\n", "", prp), ".png"),
              width=12, height=5, units="in")
+      
 }
-
 
 
 
@@ -177,11 +228,11 @@ ggsave("figures/windsheds/global/windshed_stat_correlations.png",
 
 ### speed-isotropy-direction space
 
-d <- f %>%
-      filter(property == "wind",
-             direction == "outbound",
-             moment == "windshed") %>%
-      spread(stat, value)
+# d <- f %>%
+#       filter(property == "wind",
+#              direction == "outbound",
+#              moment == "windshed") %>%
+#       spread(stat, value)
 
 
 
@@ -290,11 +341,12 @@ dd <- d %>%
       mutate(windfill = truncate(windfill)) %>%
       filter(is.finite(windfill), is.finite(clim)) %>%
       mutate(color = colors2d(cbind(rank(.$clim), rank(.$windfill)),
-                              c("forestgreen", "yellow", "red", "darkblue")))
+                              c("forestgreen", "yellow", "red", "darkblue"))) %>%
+      mutate(direction = factor(direction, levels=c("outbound", "inbound")))
 
 txt <- data.frame(direction = c("outbound", "inbound"),
                   text = c("outbound", "inbound"),
-                  x = min(dd$x), y=min(dd$y) + .3 *(diff(range(dd$y))))
+                  x = min(dd$x) + 25, y=min(dd$y) + .2 *(diff(range(dd$y))))
 
 map <- ggplot(dd, aes(x, y)) +
       facet_grid(direction ~ .) +
@@ -312,17 +364,17 @@ legend <- ggplot(dd, aes(clim, windfill)) +
       theme_minimal() +
       theme(#text=element_text(size = 45),
             strip.text=element_blank()) +
-      labs(x = "area of analog climate",
-           y = "proportion windfilling")
+      labs(x = "climate similarity",
+           y = "wind facilitation")
 
 
 sd <- d %>%
       select(-moment, -stat) %>%
       filter(property %in% c("clim", "wind", "overlap")) %>%
       mutate(property = factor(property, levels=c("clim", "wind", "overlap"),
-                               labels=c("area of\nanalog\nclimate",
-                                        "area of\naccessible\nwindshed",
-                                        "area of\nwind-analog\noverlap"))) %>%
+                               labels=c("climate  \nsimilarity  ",
+                                        "wind  \naccessibility  ",
+                                        "wind-analog  \noverlap  "))) %>%
       group_by(property) %>%
       mutate(value = ifelse(grepl("overlap", property), truncate(value), value)) %>%
       ungroup() %>%
@@ -348,16 +400,35 @@ scat <- sd %>% #sample_n(5000) %>%
 p <- arrangeGrob(legend, scat, ncol=1, heights=c(1, 3))
 p <- arrangeGrob(map, p, ncol=2, widths=c(4, 1))
 ggsave("figures/windsheds/global/windfill_clim.png", p, width=10, height=8, units="in")
-ggsave("figures/manuscript/fig_s4.png", p, width=10, height=8, units="in")
+
+
+source("E:/edges/range-edges/code/utilities.r")
+ggs("figures/manuscript/fig_s4.png", p, width=10, height=8, units="in",
+    add = grid.text(letters[1:6], 
+                    x=c(.05, .05, .82, .82, .82, .82), 
+                    y=c(.62, .115, .78, .55, .30, .05),
+                    gp=gpar(fontsize=20, fontface="bold", col="black")))
 
 # png("figures/windsheds/windfill_clim.png", width=3000, height=2000)
 # grid.draw(p)
 # dev.off()
 
 
+library(geosphere)
+dg <- function(lat) distGeo(c(0, lat), c(1, lat))/1000
+areas <- d %>% select(y) %>% distinct()
+areas$area <- sapply(areas$y, dg)
+
 
 ### 3d surface with RGL 
 rglplots <- function(){
+      
+      ext <- extent(c(-160, -70, 0, 80))
+      
+      elev <- raster("F:/chelsa/elevation/mn30_grd/w001001.adf") %>% 
+            crop(ext) %>%
+            aggregate(3) %>%
+            focal(matrix(1, 5, 5), mean, na.rm=T)
       
       f <- read_csv(infile) %>%
             select(-runtime) %>%
@@ -372,27 +443,30 @@ rglplots <- function(){
             mutate(windfill = overlap / clim) %>%
             gather(property, value, clim, wind, overlap, windfill)
       
-      dd <- d %>%
-            select(-moment, -stat) %>%
-            spread(property, value) %>%
-            mutate(windfill = truncate(windfill)) %>%
+      
+      for(drn in unique(d$direction)){
             
             pal <- c("forestgreen", "yellow", "red", "darkblue")
-      
-      dd <- mutate(dd, color = colors2d(cbind(rank(dd$clim), 
-                                              rank(dd$windfill)), pal))
-      
-      ext <- extent(c(-160, -70, 0, 80))
-      
-      elev <- raster("F:/chelsa/elevation/mn30_grd/w001001.adf") %>% 
-            crop(ext) %>%
-            aggregate(3) %>%
-            focal(matrix(1, 5, 5), mean, na.rm=T)
-      
-      for(dir in unique(dd$direction)){
+            
+            dd <- d %>%
+                  filter(direction==drn) %>%
+                  select(-moment, -stat) %>%
+                  spread(property, value) %>%
+                  mutate(windfill = truncate(windfill)) %>%
+                  filter(is.finite(clim), is.finite(windfill)) %>%
+                  mutate(clim = truncate(clim, .001),
+                         windfill = truncate(windfill, .001, c("high", "low"))) %>%
+                  
+                  left_join(areas) %>%
+                  arrange(clim) %>%
+                  mutate(climrnk = cumsum(area)) %>%
+                  arrange(windfill) %>%
+                  mutate(windfillrnk = cumsum(area)) %>%
+                  
+                  mutate(color = colors2d(cbind(.$climrnk, .$windfillrnk), pal))
+            
             cst <- dd %>%
-                  filter(x >= ext@xmin, x <= ext@xmax, y >= ext@ymin, y <= ext@ymax,
-                         direction==dir)
+                  filter(x >= ext@xmin, x <= ext@xmax, y >= ext@ymin, y <= ext@ymax)
             cst <- expand.grid(x=unique(cst$x), y=unique(cst$y)) %>%
                   left_join(cst) %>%
                   mutate(color=ifelse(is.na(color), "white", color)) %>%
@@ -420,13 +494,13 @@ rglplots <- function(){
             y <- 1000 * (1:ncol(z))
             
             library(rgl)
-            r3dDefaults$windowRect = c(0,0,1000, 1000)
+            r3dDefaults$windowRect = c(0,0,1000,1000)
             open3d()
             rgl.surface(x, -y, z*12, col=wind_color, shininess=128)
             rgl.viewpoint(theta = 180, phi = 45, zoom=.17)
             rgl.clear("lights")
             light3d(phi=15, specular="gray60")
-            snapshot3d(paste0("figures/windsheds/rgl/persp", dir, ".png"))
+            snapshot3d(paste0("figures/windsheds/rgl/persp_", drn, ".png"))
             rgl.quit()
       }
 }
@@ -442,10 +516,18 @@ for(drn in c("inbound", "outbound")){
             spread(property, value) %>%
             mutate(windfill = overlap / clim) %>%
             filter(is.finite(clim), is.finite(windfill)) %>%
-            mutate(clim = truncate(clim),
-                   windfill = truncate(windfill)) %>%
-            mutate(color2 = colors2d(cbind(rank(.$clim), rank(.$windfill)),
+            mutate(clim = truncate(clim, .001),
+                   windfill = truncate(windfill, .001, c("high", "low"))) %>%
+            
+            left_join(areas) %>%
+            arrange(clim) %>%
+            mutate(climrnk = cumsum(area)) %>%
+            arrange(windfill) %>%
+            mutate(windfillrnk = cumsum(area)) %>%
+            
+            mutate(color2 = colors2d(cbind(.$climrnk, .$windfillrnk),
                                      c("forestgreen", "yellow", "red", "darkblue"))) %>%
+            
             mutate(color = colorwheel2d(cbind((.$clim), (.$windfill)),
                                         c("gray",
                                           
@@ -495,6 +577,7 @@ for(drn in c("inbound", "outbound")){
       
       legend <- ggplot(dd, aes(clim, windfill)) +
             geom_point(color=dd$color2, size=.3) +
+            scale_y_log10() +
             theme_minimal() +
             theme(text=element_text(size = 15)) +
             labs(x = paste0("analog climate availability (", drn, " direction)\n"),
@@ -502,7 +585,7 @@ for(drn in c("inbound", "outbound")){
                             "wind-accessibility of analog area\n\n<--- hindrance --------------------------- facilitation --->"))
       
       library(png)
-      img <- readPNG(paste0("figures/windsheds/rgl/persp", drn, ".png"))
+      img <- readPNG(paste0("figures/windsheds/rgl/persp_", drn, ".png"))
       img <- apply(img, c(1, 2), function(x){if(mean(x)>.75){return(c(1,1,1))}; return(x)})
       img <- aperm(img, c(2, 3, 1))
       img <- rasterGrob(img, interpolate=TRUE)
