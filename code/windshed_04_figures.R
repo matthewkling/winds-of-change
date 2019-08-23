@@ -383,7 +383,9 @@ sd <- d %>%
 
 tsd <- sd %>%
       group_by(property) %>%
-      summarize(inbound = max(inbound),
+      summarize(r2pears = cor(inbound, outbound, use="pairwise.complete.obs") ^2,
+                r2spear = cor(inbound, outbound, use="pairwise.complete.obs", method="spearman") ^2,
+                inbound = max(inbound),
                 outbound = max(range(outbound)))
 
 scat <- sd %>% #sample_n(5000) %>%
@@ -392,6 +394,8 @@ scat <- sd %>% #sample_n(5000) %>%
       geom_point(size=.25, alpha=.05) +
       geom_text(data=tsd, aes(label=property), 
                 hjust=1, vjust=1, lineheight=.7, fontface="bold", size=4) +
+      geom_text(data=tsd, aes(label=paste("\n\n\n\n\n\n\n\n\n\nr2 =", round(r2pears, 2))), color="red",
+                hjust=1, vjust=1, lineheight=.7, fontface="bold", size=4) +
       theme_minimal() +
       theme(strip.text=element_blank()) +
       labs(x="outbound",
@@ -399,15 +403,15 @@ scat <- sd %>% #sample_n(5000) %>%
 
 p <- arrangeGrob(legend, scat, ncol=1, heights=c(1, 3))
 p <- arrangeGrob(map, p, ncol=2, widths=c(4, 1))
-ggsave("figures/windsheds/global/windfill_clim.png", p, width=10, height=8, units="in")
-
 
 source("E:/edges/range-edges/code/utilities.r")
-ggs("figures/manuscript/fig_s4.png", p, width=10, height=8, units="in",
+ggs("figures/windsheds/global/windfill_clim.png", p, width=10, height=8, units="in",
     add = grid.text(letters[1:6], 
                     x=c(.05, .05, .82, .82, .82, .82), 
                     y=c(.62, .115, .78, .55, .30, .05),
                     gp=gpar(fontsize=20, fontface="bold", col="black")))
+file.copy("figures/windsheds/global/windfill_clim.png",
+          "figures/manuscript/fig_s4.png", overwrite = T)
 
 # png("figures/windsheds/windfill_clim.png", width=3000, height=2000)
 # grid.draw(p)
