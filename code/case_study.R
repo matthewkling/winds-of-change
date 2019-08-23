@@ -125,10 +125,10 @@ gene <- function(sp){
       
       # grid cells across species range
       pts0 <- climate %>% crop(rrange) %>% mask(rrange) %>% 
-            stack(crop(climate0, rrange)) %>%
+            stack(crop(land, rrange)) %>%
             rasterToPoints() %>% 
             as.data.frame()
-      pts <- filter(pts0, is.finite(temperature.1.1))
+      pts <- filter(pts0, is.finite(temperature.1))
       # bg <- climate0 %>% crop(rrange) %>% 
       #       rasterToPoints() %>% 
       #       as.data.frame() %>%
