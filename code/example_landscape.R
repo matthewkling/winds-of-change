@@ -12,9 +12,9 @@ ff <- filter(f, abs(y) < 45)
 i <- sample(1:nrow(ff), 1)
 #saveRDS(i, "data/windshed/example_landscape_index.rds")
 i <- readRDS("data/windshed/example_landscape_index.rds")
-
+radius = 500
 r <- woc(ff$x[i], ff$y[i], windrose=rose, climate=climate,
-         radius = 500, time_conv=time_conv,
+         radius = radius, time_conv=time_conv,
          sigma = 2,
          output = "rasters")
 
@@ -109,7 +109,7 @@ origin <- matrix(c(ff$x[i], ff$y[i]), ncol=2)
 coords_ll <- SpatialPoints(origin, crs(climate)) %>%
       spTransform(CRS("+proj=longlat +ellps=WGS84 +datum=WGS84")) %>%
       coordinates()
-circle <- geo_circle(coords_ll, width = 1000 * 1000)
+circle <- geo_circle(coords_ll, width = radius * 1000)
 
 key <- ggplot() +
       geom_polygon(data=md, aes(long, lat, group=group),
