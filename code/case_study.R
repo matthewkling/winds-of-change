@@ -3,37 +3,36 @@ library(tidyverse)
 library(raster)
 library(dismo)
 
-
-
-# custom windrose
-intdir <- "data/windrose/monthly_p1"
-f <- list.files(intdir, full.names=T)
-f <- f[grepl("05_|06_|07_", f)]
-years <- 30/4
-p <- 1
-outfile <- "data/case_study/windrose_p1_1980_2009_mayjunejuly.tif"
-f <- f %>% 
-      lapply(stack) %>%
-      Reduce("+", .) %>%
-      "/"(24 * 365 * years) %>% # number of hours
-      "^"(1/p) %>%
-      writeRaster(outfile, overwrite=T)
-
-
-# custom windrose
-intdir <- "data/windrose/monthly_p1"
-f <- list.files(intdir, full.names=T)
-f <- f[grepl("09_|10_|11_", f)]
-years <- 30/4
-p <- 1
-outfile <- "data/case_study/windrose_p1_1980_2009_septoctnov.tif"
-f <- f %>% 
-      lapply(stack) %>%
-      Reduce("+", .) %>%
-      "/"(24 * 365 * years) %>% # number of hours
-      "^"(1/p) %>%
-      writeRaster(outfile, overwrite=T)
-
+# custom windroses
+if(F){
+      
+      intdir <- "data/windrose/monthly_p1"
+      f <- list.files(intdir, full.names=T)
+      f <- f[grepl("05_|06_|07_", f)]
+      years <- 30/4
+      p <- 1
+      outfile <- "data/case_study/windrose_p1_1980_2009_mayjunejuly.tif"
+      f <- f %>% 
+            lapply(stack) %>%
+            Reduce("+", .) %>%
+            "/"(24 * 365 * years) %>% # number of hours
+            "^"(1/p) %>%
+            writeRaster(outfile, overwrite=T)
+      
+      
+      intdir <- "data/windrose/monthly_p1"
+      f <- list.files(intdir, full.names=T)
+      f <- f[grepl("09_|10_|11_", f)]
+      years <- 30/4
+      p <- 1
+      outfile <- "data/case_study/windrose_p1_1980_2009_septoctnov.tif"
+      f <- f %>% 
+            lapply(stack) %>%
+            Reduce("+", .) %>%
+            "/"(24 * 365 * years) %>% # number of hours
+            "^"(1/p) %>%
+            writeRaster(outfile, overwrite=T)
+}
 
 stop("run the first parts of windshed_02_analysis")
 
@@ -49,6 +48,7 @@ gene <- function(sp){
       
       # load baseline and future temperature data
       climate <- stack("data/geographic/processed/temperature.tif")
+      climate0 <- climate[[1]]
       climate <- crop(climate, ext)
       
       # rasterize species range, ensuring holes are handled properly
@@ -124,9 +124,15 @@ gene <- function(sp){
       }
       
       # grid cells across species range
-      pts <- climate %>% crop(rrange) %>% mask(rrange) %>% 
+      pts0 <- climate %>% crop(rrange) %>% mask(rrange) %>% 
+            stack(crop(climate0, rrange)) %>%
             rasterToPoints() %>% 
             as.data.frame()
+      pts <- filter(pts0, is.finite(temperature.1.1))
+      # bg <- climate0 %>% crop(rrange) %>% 
+      #       rasterToPoints() %>% 
+      #       as.data.frame() %>%
+      #       select(x, y)
       
       # windscapes for every cell
       cost_to_flow <- function(x) 1/x
@@ -135,6 +141,8 @@ gene <- function(sp){
                 cost_to_flow=cost_to_flow) %>%
             do.call("rbind", .) %>%
             as.data.frame()
+      
+      d <- select(pts0, x, y) %>% full_join(d)
       saveRDS(d, paste0("data/case_study/data_", sp, ".rds"))
       
       ld <- land %>%
@@ -382,8 +390,14 @@ library(gridExtra)
 library(grid)
 
 sp <- "Pinus contorta"
-dsdm <- sdm(sp)
-dgene <- gene(sp)
+
+if(F){
+      saveRDS(sdm(sp), "data/case_study/sdm_data.rds")
+      saveRDS(gene(sp), "data/case_study/geneflow_data.rds")
+}
+
+dsdm <- readRDS("data/case_study/sdm_data.rds")
+dgene <- readRDS("data/case_study/geneflow_data.rds")
 
 xlims <- c(range(dsdm$x) + c(0, -7))
 ylims <- c(range(dgene$y) + c(0, 3))
@@ -396,7 +410,7 @@ p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
       annotate(geom="text", x=xlims[1]+4, y=ylims[1]+1.5, 
                size=4, lineheight=.75, hjust=0, vjust=0,
                label="genetic\nrescue") +
-      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen"), na.value = "black") +
       theme_void() +
       scale_x_continuous(expand=c(0,0), limits=xlims) +
       scale_y_continuous(expand=c(0,0), limits=ylims) +
@@ -464,7 +478,7 @@ p1c <- ggplot(dx1, aes(x, y)) +
       geom_text(data=dxt1, aes(x, y, label=label),
                 nudge_x = 8, nudge_y = 6, hjust=0, lineheight=.75) +
       facet_wrap(~stat) +
-      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+      scale_fill_gradientn(colors=c("red", "yellow", "forestgreen"), na.value="black") +
       scale_x_continuous(expand=c(0,0), limits=xlims) +
       scale_y_continuous(expand=c(0,0), limits=ylims) +
       theme_void() +
@@ -478,7 +492,7 @@ pb <- arrangeGrob(p1, p2, nrow=1)
 p <- arrangeGrob(pb, pa, ncol=1, heights = c(2, 1))
 
 source("E:/edges/range-edges/code/utilities.r")
-ggs("figures/manuscript/fig_5.png", p, width=9, height=4.8, units="in",
+ggs("figures/manuscript/fig_5.png", p, width=9, height=5.2, units="in",
     add = grid.text(letters[1:6], 
                     x=c(0, 0, .25, .5, .5, .75) + .02, 
                     y=c(.33, 0, 0, .33, 0, 0) + .06,
