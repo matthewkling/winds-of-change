@@ -48,6 +48,15 @@ geo_circle <- function(pts, width, thresh=100) {
       poly
 }
 
+add_coords <- function(windrose){
+      rows <- cols <- windrose[[1]]
+      rows[] <- rep(1:nrow(rows), each=ncol(rows))
+      cols[] <- rep(1:ncol(rows), nrow(rows))
+      windrose <- stack(windrose, rows, cols)
+      names(windrose) <- c("SW", "W", "NW", "N", "NE", "E", "SE", "S", "row", "col")
+      return(windrose)
+}
+
 
 woc <- function(x, y, windrose, climate,
                 radius = 1000, time_conv=identity,
@@ -149,36 +158,155 @@ coords <- c(179, 67)
 x <- woc(coords[1], coords[2], rose, climate, time_conv=time_conv)
 #profvis({ x <- woc(coords[1], coords[2], rose, climate, time_conv=identity) })
 
+
+
+windscapes <- function(fun, ncores = 7, radius=250){
+      
+      outfile <- paste0("data/windshed/p1_30y_", radius, "km_", fun$name, ".csv")
+      if(file.exists(outfile)){
+            message(paste(fun$name, radius, "output already exists -- aborting"))
+            return(NULL)
+      }
+      
+      pixels <- land %>%
+            rasterToPoints() %>%
+            as.data.frame() %>%
+            filter(abs(x) <= 180) %>%
+            #sample_n(10) %>%
+            mutate(batch = sample(1:ncores, nrow(.), replace=T)) %>%
+            split(.$batch)
+      
+      require(doParallel)
+      cl <- makeCluster(ncores)
+      registerDoParallel(cl)
+      d <- foreach(pts = pixels,
+                   .combine="rbind",
+                   .export=c("woc", "rose", "climate", "fun"),
+                   .packages=(.packages())) %dopar% {
+                         map2(pts$x, pts$y, possibly(woc, NULL), 
+                              windrose=rose, climate=climate, radius=radius,
+                              time_conv=fun$fx) %>%
+                               do.call("rbind", .) %>%
+                               as.data.frame()
+                   }
+      stopCluster(cl)
+      write_csv(d, outfile)
+}
+
+functions <- list(list(name = "inv", fx = function(x){1/x}, form = "1/x"),
+                  list(name = "sqrtinv", fx = function(x) {sqrt(1/x)}, form = "sqrt(1/x)"),
+                  list(name = "exp995", fx = function(x) {.995 ^ x}, form = ".995 ^ x"),
+                  list(name = "exp99", fx = function(x) {.99 ^ x}, form = ".99 ^ x"),
+                  list(name = "invlog", fx = function(x) {1/log(x)}, form = "1/log(x)"))
+
+lapply(functions, windscapes)
+
+
+
+####### sensitivity to accessibility function #########
+
+
 ncores <- 7
 pixels <- land %>%
       rasterToPoints() %>%
       as.data.frame() %>%
       filter(abs(x) <= 180) %>%
-      #sample_n(nrow(.)/100) %>%
+      sample_n(1000) %>%
       mutate(batch = sample(1:ncores, nrow(.), replace=T)) %>%
       split(.$batch)
 
 
-require(doParallel)
-cl <- makeCluster(ncores)
-registerDoParallel(cl)
-start <- Sys.time()
-d <- foreach(pts = pixels,
-             .combine="rbind",
-             .packages=(.packages())) %dopar% {
-                   map2(pts$x, pts$y, possibly(woc, NULL), 
-                        windrose=rose, climate=climate, time_conv=time_conv, radius=250) %>%
-                         do.call("rbind", .) %>%
-                         as.data.frame()
-             }
-Sys.time() - start
-stopCluster(cl)
-write_csv(d, "data/windshed/p1_30y_250km.csv")
+windscape_sample <- function(fun, pixels, ncores = 7, radius=250){
+      
+      require(doParallel)
+      cl <- makeCluster(ncores)
+      registerDoParallel(cl)
+      d <- foreach(pts = pixels,
+                   .combine="rbind",
+                   .export=c("woc", "rose", "climate", "geo_circle", 
+                             "add_coords", "analogs"),
+                   .packages=(.packages())) %dopar% {
+                         map2(pts$x, pts$y, possibly(woc, NULL), 
+                              windrose=rose, climate=climate, radius=radius,
+                              time_conv=fun$fx) %>%
+                               do.call("rbind", .) %>%
+                               as.data.frame()
+                   }
+      stopCluster(cl)
+      d$fun <- fun$name
+      return(d)
+}
+
+sd <- lapply(functions, windscape_sample, pixels=pixels)
+
+
+
+d <- do.call("rbind", sd) %>%
+      select(overlap_fwd_windshed_size, fun, x, y)
+
+fd <- data.frame()
+for(i in 1:length(functions)){
+      
+      fun <- functions[[i]]
+      
+      d$form[d$fun==fun$name] <- fun$form
+      fdi <- data.frame(name=fun$name, fun=fun$form,
+                        x = 1:1000, y = fun$fx(1:1000))
+      fd <- rbind(fd, fdi)
+}
+
+
+d <- d %>%
+      select(-form) %>%
+      spread(fun, overlap_fwd_windshed_size) %>%
+      select(-x, -y) %>%
+      mutate_all(rank)
+
+
+
+library(ggforce)
+library(gridExtra)
+library(grid)
+source("E:/edges/range-edges/code/utilities.r")
+
+
+
+colnames(d) <- sapply(functions, function(x)x$form)
+scatters <- ggplot(d, aes(x = .panel_x, y = .panel_y)) + 
+      geom_point(alpha = 0.2, shape = 16, size = 0.5) + 
+      facet_matrix(vars(everything())) +
+      theme_minimal() +
+      theme(axis.text=element_blank())
+
+curves <- ggplot(fd, aes(x, y, color=fun)) + geom_line() +
+      theme_minimal() +
+      ylim(0, 1) +
+      theme(legend.position=c(.7, .7),
+            legend.title = element_blank()) +
+      labs(x="wind hours",
+           y="wind accessibility") +
+      coord_fixed(ratio=1000)
+
+
+p <- arrangeGrob(curves, scatters, ncol=2, widths=c(1, 2))
+
+corr <- as.vector(cor(d, method="spearman")) %>% round(2)
+
+ggs("figures/windsheds/global/sensitivity.png", p, width=9, height=6, units="in",
+    add = list(grid.text(letters[1:2], 
+                         x=c(.03, .36), 
+                         y=c(.75, .95),
+                         gp=gpar(fontsize=20, fontface="bold", col="black")),
+               grid.text(corr, 
+                         x=rep(seq(.37, .87, length.out=5), 5), 
+                         y=rep(seq(.92, .17, length.out=5), each=5),
+                         gp=gpar(fontsize=8, col="red"))
+    )
+    )
+
 
 
 stop("wootwoot")
-
-
 
 
 ### some exploratory plots ###
