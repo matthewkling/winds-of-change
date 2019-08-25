@@ -96,10 +96,19 @@ woc <- function(x, y, windrose, climate,
       s$overlap_fwd <- s$wind_fwd * s$clim_fwd
       s$overlap_rev <- s$wind_rev * s$clim_rev
       
+      # mask values close to origin to remove bias from latitudinal cell size gradient
+      buffer <- distGeo(c(0,0), c(res(climate)[1], 0)) * .99
+      inner_circle <- geo_circle(coords_ll, width = buffer)
+      hole <- mask(s[[1]], inner_circle) %>%
+            reclassify(c(NA, NA, 1, -Inf, Inf, NA))
+      s <- mask(s, hole)
+      
       if(output == "rasters") return(s)
       
       
       ### summary statistics of wind and climate surfaces
+      
+      
       
       ex <- extent(s)
       if(ex@xmin < -180){
@@ -144,14 +153,6 @@ climate <- stack("data/geographic/processed/temperature.tif") %>% unwrap(180)
 
 #time_conv <- function(x) .995 ^ x
 time_conv <- function(x) 1 / x
-
-
-# function to convert wind cost values to flow values
-#cost_to_flow <- function(cost) .5 ^ (cost * 1e8)
-#cost_to_flow <- function(cost) (1/cost) ^ (1/2)
-#cost_to_flow <- function(cost) log10(1/cost) + 8
-#cost_to_flow <- function(cost) 1/log10(cost)
-
 
 # test
 coords <- c(179, 67)
@@ -199,11 +200,12 @@ functions <- list(list(name = "inv", fx = function(x){1/x}, form = "1/x"),
                   list(name = "exp99", fx = function(x) {.99 ^ x}, form = ".99 ^ x"),
                   list(name = "invlog", fx = function(x) {1/log(x)}, form = "1/log(x)"))
 
-lapply(functions, windscapes)
+if(F) lapply(functions, windscapes)
 
 
 
 ####### sensitivity to accessibility function #########
+
 
 
 ncores <- 7
@@ -224,9 +226,9 @@ windscape_sample <- function(fun, pixels, ncores = 7, radius=250){
       d <- foreach(pts = pixels,
                    .combine="rbind",
                    .export=c("woc", "rose", "climate", "geo_circle", 
-                             "add_coords", "analogs"),
+                             "add_coords", "analogs", "quants"),
                    .packages=(.packages())) %dopar% {
-                         map2(pts$x, pts$y, possibly(woc, NULL), 
+                         map2(pts$x, pts$y, woc, # possibly(woc, NULL), 
                               windrose=rose, climate=climate, radius=radius,
                               time_conv=fun$fx) %>%
                                do.call("rbind", .) %>%
@@ -237,6 +239,7 @@ windscape_sample <- function(fun, pixels, ncores = 7, radius=250){
       return(d)
 }
 
+
 sd <- lapply(functions, windscape_sample, pixels=pixels)
 
 
@@ -246,9 +249,7 @@ d <- do.call("rbind", sd) %>%
 
 fd <- data.frame()
 for(i in 1:length(functions)){
-      
       fun <- functions[[i]]
-      
       d$form[d$fun==fun$name] <- fun$form
       fdi <- data.frame(name=fun$name, fun=fun$form,
                         x = 1:1000, y = fun$fx(1:1000))
@@ -303,6 +304,54 @@ ggs("figures/windsheds/global/sensitivity.png", p, width=9, height=6, units="in"
                          gp=gpar(fontsize=8, col="red"))
     )
     )
+
+
+
+
+
+
+
+
+### define a quantile function based on the global frequency of wind hours
+
+n <- 1000
+e <- pixels %>%
+      bind_rows() %>%
+      select(x, y) %>%
+      sample_n(n) %>%
+      mutate(id = 1:nrow(.))
+e <- map2(e$x, e$y, possibly(woc, NULL), 
+          windrose=rose, climate=climate, 
+          time_conv=identity, radius=250,
+          output="rasters")
+quants <- map(e, function(x) x$wind_fwd) %>%
+      map(values) %>%
+      do.call("c", .) %>%
+      na.omit() %>%
+      quantile(probs=seq(0, 1, .001))
+functions[[length(functions) + 1]] <- list(name = "quant", 
+                                           fx = function(x) {1 - ecdf(quants)(x)}, 
+                                           form = "1-ecdf(x)")
+
+
+fd <- data.frame()
+for(i in 1:length(functions)){
+      fun <- functions[[i]]
+      d$form[d$fun==fun$name] <- fun$form
+      fdi <- data.frame(name=fun$name, fun=fun$form,
+                        x = 1:1000, y = fun$fx(1:1000))
+      fd <- rbind(fd, fdi)
+}
+
+ggplot(fd, aes(x, y, color=fun)) + geom_line() +
+      theme_minimal() +
+      ylim(0, 1) +
+      theme(legend.position=c(.7, .7),
+            legend.title = element_blank()) +
+      labs(x="wind hours",
+           y="wind accessibility") +
+      coord_fixed(ratio=1000)
+
 
 
 
