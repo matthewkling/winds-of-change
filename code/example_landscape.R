@@ -2,7 +2,7 @@
 
 
 
-f <- read_csv("data/windshed/p1_30y_250km.csv") %>%
+f <- read_csv("data/windshed/p1_30y_250km_inv.csv") %>%
       select(-runtime) %>%
       gather(var, value, -x, -y) %>%
       separate(var, c("property", "direction", "moment", "stat"), sep="_")
@@ -116,7 +116,7 @@ key <- ggplot() +
                    fill="gray30") +
       geom_polygon(data=fortify(circle), aes(long, lat, group=group), fill="dodgerblue") +
       geom_point(data=ff[i,c("x", "y")], 
-                 aes(x, y), color="red", size=pointsize) +
+                 aes(x, y), color="red", size=pointsize/2) +
       coord_map(projection="ortho", 
                 orientation=c(ff[i, "y"], ff[i, "x"], 0)) +
       scale_x_continuous(breaks=seq(-180, 180, 20)) +
@@ -134,7 +134,7 @@ temp <- ggplot() +
       geom_raster(data=td, aes(x, y, fill=layer.1)) +
       geom_point(data=ff[i,c("x", "y")], 
                  aes(x, y), color="red", size=pointsize) +
-      scale_fill_gradientn(colors=c("dodgerblue", "blue", "purple", "red", "yellow")) +
+      scale_fill_gradientn(colors=c("cyan", "blue", "purple", "red", "orange", "gold", "yellow")) +
       theme_void() +
       theme_void() + theme(legend.position="top", legend.title = element_text(size=10)) + 
       guides(fill = guide_colourbar(barwidth=5, barheight=.5, title.position="top", title.hjust = 0.5)) +
