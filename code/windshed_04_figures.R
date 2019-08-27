@@ -18,9 +18,9 @@ select <- dplyr::select
 
 
 
-infile <- "data/windshed/p1_30y_250km.csv"
-#infile <- "data/windshed/p1_30y_250km_exp995.csv"
-#infile <- "data/windshed/p1_30y_250km_exp99.csv"
+##infile <- "data/windshed/p1_30y_250km_exp995.csv"
+##infile <- "data/windshed/p1_30y_250km_exp99.csv"
+infile <- "data/windshed/p1_30y_250km_inv.csv"
 
 
 

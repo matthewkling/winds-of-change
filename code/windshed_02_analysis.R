@@ -62,7 +62,7 @@ woc <- function(x, y, windrose, climate,
                 radius = 1000, time_conv=identity,
                 sigma = 2,
                 output = "summary"){
-      
+      #browser()
       start <- Sys.time()
       coords <- c(x, y)
       origin <- matrix(coords, ncol=2)
@@ -96,19 +96,10 @@ woc <- function(x, y, windrose, climate,
       s$overlap_fwd <- s$wind_fwd * s$clim_fwd
       s$overlap_rev <- s$wind_rev * s$clim_rev
       
-      # mask values close to origin to remove bias from latitudinal cell size gradient
-      buffer <- distGeo(c(0,0), c(res(climate)[1], 0)) * .99
-      inner_circle <- geo_circle(coords_ll, width = buffer)
-      hole <- mask(s[[1]], inner_circle) %>%
-            reclassify(c(NA, NA, 1, -Inf, Inf, NA))
-      s <- mask(s, hole)
-      
       if(output == "rasters") return(s)
       
       
       ### summary statistics of wind and climate surfaces
-      
-      
       
       ex <- extent(s)
       if(ex@xmin < -180){
@@ -159,12 +150,20 @@ coords <- c(179, 67)
 x <- woc(coords[1], coords[2], rose, climate, time_conv=time_conv)
 #profvis({ x <- woc(coords[1], coords[2], rose, climate, time_conv=identity) })
 
+x <- land %>% rasterToPoints() %>% as.data.frame() %>%
+      filter(abs(x) <= 180, y > 65) %>%
+      sample_n(1)
+woc(x$x, x$y, rose, climate, time_conv=time_conv)
+x <- woc(x$x, x$y, windrose=rose, climate=climate, 
+     time_conv=function(x) 1/x, radius=250,
+     output="rasters")
+plot(x, colNA="black")
 
 
-windscapes <- function(fun, ncores = 7, radius=250){
+windscapes <- function(fun, ncores = 7, radius=250, overwrite=F){
       
       outfile <- paste0("data/windshed/p1_30y_", radius, "km_", fun$name, ".csv")
-      if(file.exists(outfile)){
+      if(!overwrite & file.exists(outfile)){
             message(paste(fun$name, radius, "output already exists -- aborting"))
             return(NULL)
       }
@@ -182,7 +181,8 @@ windscapes <- function(fun, ncores = 7, radius=250){
       registerDoParallel(cl)
       d <- foreach(pts = pixels,
                    .combine="rbind",
-                   .export=c("woc", "rose", "climate", "fun"),
+                   .export=c("woc", "rose", "climate", "geo_circle", 
+                             "add_coords", "analogs", "fun"),
                    .packages=(.packages())) %dopar% {
                          map2(pts$x, pts$y, possibly(woc, NULL), 
                               windrose=rose, climate=climate, radius=radius,
@@ -198,15 +198,19 @@ functions <- list(list(name = "inv", fx = function(x){1/x}, form = "1/x"),
                   list(name = "sqrtinv", fx = function(x) {sqrt(1/x)}, form = "sqrt(1/x)"),
                   list(name = "exp995", fx = function(x) {.995 ^ x}, form = ".995 ^ x"),
                   list(name = "exp99", fx = function(x) {.99 ^ x}, form = ".99 ^ x"),
+                  list(name = "exp98", fx = function(x) {.95 ^ x}, form = ".95 ^ x"),
                   list(name = "invlog", fx = function(x) {1/log(x)}, form = "1/log(x)"))
 
-if(F) lapply(functions, windscapes)
+if(F) lapply(functions[1], windscapes, overwrite=T)
 
 
 
 ####### sensitivity to accessibility function #########
 
-
+library(ggforce)
+library(gridExtra)
+library(grid)
+source("E:/edges/range-edges/code/utilities.r")
 
 ncores <- 7
 pixels <- land %>%
@@ -226,7 +230,7 @@ windscape_sample <- function(fun, pixels, ncores = 7, radius=250){
       d <- foreach(pts = pixels,
                    .combine="rbind",
                    .export=c("woc", "rose", "climate", "geo_circle", 
-                             "add_coords", "analogs", "quants"),
+                             "add_coords", "analogs"),
                    .packages=(.packages())) %dopar% {
                          map2(pts$x, pts$y, woc, # possibly(woc, NULL), 
                               windrose=rose, climate=climate, radius=radius,
@@ -239,10 +243,7 @@ windscape_sample <- function(fun, pixels, ncores = 7, radius=250){
       return(d)
 }
 
-
 sd <- lapply(functions, windscape_sample, pixels=pixels)
-
-
 
 d <- do.call("rbind", sd) %>%
       select(overlap_fwd_windshed_size, fun, x, y)
@@ -256,21 +257,12 @@ for(i in 1:length(functions)){
       fd <- rbind(fd, fdi)
 }
 
-
 d <- d %>%
+      arrange(form) %>%
       select(-form) %>%
       spread(fun, overlap_fwd_windshed_size) %>%
       select(-x, -y) %>%
       mutate_all(rank)
-
-
-
-library(ggforce)
-library(gridExtra)
-library(grid)
-source("E:/edges/range-edges/code/utilities.r")
-
-
 
 colnames(d) <- sapply(functions, function(x)x$form)
 scatters <- ggplot(d, aes(x = .panel_x, y = .panel_y)) + 
@@ -288,19 +280,18 @@ curves <- ggplot(fd, aes(x, y, color=fun)) + geom_line() +
            y="wind accessibility") +
       coord_fixed(ratio=1000)
 
-
 p <- arrangeGrob(curves, scatters, ncol=2, widths=c(1, 2))
 
 corr <- as.vector(cor(d, method="spearman")) %>% round(2)
 
 ggs("figures/windsheds/global/sensitivity.png", p, width=9, height=6, units="in",
     add = list(grid.text(letters[1:2], 
-                         x=c(.03, .36), 
+                         x=c(.03, .34), 
                          y=c(.75, .95),
                          gp=gpar(fontsize=20, fontface="bold", col="black")),
                grid.text(corr, 
-                         x=rep(seq(.37, .87, length.out=5), 5), 
-                         y=rep(seq(.92, .17, length.out=5), each=5),
+                         x=rep(seq(.37, .89, length.out=6), 6), 
+                         y=rep(seq(.92, .14, length.out=6), each=6),
                          gp=gpar(fontsize=8, col="red"))
     )
     )
@@ -314,7 +305,7 @@ ggs("figures/windsheds/global/sensitivity.png", p, width=9, height=6, units="in"
 
 ### define a quantile function based on the global frequency of wind hours
 
-n <- 1000
+n <- 100
 e <- pixels %>%
       bind_rows() %>%
       select(x, y) %>%
@@ -329,9 +320,17 @@ quants <- map(e, function(x) x$wind_fwd) %>%
       do.call("c", .) %>%
       na.omit() %>%
       quantile(probs=seq(0, 1, .001))
-functions[[length(functions) + 1]] <- list(name = "quant", 
-                                           fx = function(x) {1 - ecdf(quants)(x)}, 
-                                           form = "1-ecdf(x)")
+# functions[[length(functions) + 1]] <- list(name = "quant", 
+#                                            fx = function(x) {ecdf(quants)(x)}, 
+#                                            form = "1-ecdf(x)")
+
+
+functions <- list(list(name = "inv", fx = function(x){1/x}, form = "1/x"),
+                  list(name = "sqrtinv", fx = function(x) {sqrt(1/x)}, form = "sqrt(1/x)"),
+                  list(name = "exp995", fx = function(x) {.995 ^ x}, form = ".995 ^ x"),
+                  list(name = "exp990", fx = function(x) {.990 ^ x}, form = ".99 ^ x"),
+                  list(name = "exp975", fx = function(x) {.975 ^ x}, form = ".975 ^ x"),
+                  list(name = "invlog", fx = function(x) {1/log(x)}, form = "1/log(x)"))
 
 
 fd <- data.frame()
@@ -343,9 +342,21 @@ for(i in 1:length(functions)){
       fd <- rbind(fd, fdi)
 }
 
-ggplot(fd, aes(x, y, color=fun)) + geom_line() +
+qd <- data.frame(y=seq(0, 1, length.out=length(quants)), x=quants) %>%
+      mutate(#y = cumsum(y),
+             y = y/max(y)) %>%
+      filter(x <= 1000)
+# qd <- data.frame(q=round(quants, -1)) %>%
+#       count(q) %>%
+#       mutate(n = n / max(n)) %>%
+#       filter(q <= 1000)
+
+ggplot() + 
+      geom_line(data=qd, aes(x, y)) +
+      geom_line(data=fd, aes(x, y, color=fun)) +
       theme_minimal() +
       ylim(0, 1) +
+      xlim(0, max(fd$x)) +
       theme(legend.position=c(.7, .7),
             legend.title = element_blank()) +
       labs(x="wind hours",
