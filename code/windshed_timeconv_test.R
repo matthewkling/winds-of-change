@@ -15,15 +15,22 @@ e <- f %>%
       sample_n(n) %>%
       mutate(id = 1:nrow(.))
 
+time_conv <- function(x) .995 ^ x
+time_conv <- function(x) .99 ^ x
+time_conv <- function(x) sqrt(1 / x)
+time_conv <- function(x) (1 / x)
 
 r <- map2(e$x, e$y, possibly(woc, NULL), 
           windrose=rose, climate=climate, 
-          time_conv=time_conv, radius=500,
+          time_conv=time_conv, radius=250,
           output="rasters")
 
-
 d <- r[1:n] %>% lapply(rasterToPoints) %>% lapply(as.data.frame)
-for(i in 1:length(d)) d[[i]]$id <- i
+for(i in 1:length(d)){
+      d[[i]]$id <- i
+      #d[[i]]$size <- rmd[[i]]["wind_fwd_windshed_size"]
+      #d[[i]]$iso <- rmd[[i]]["wind_fwd_windshed_isotropy"]
+}
 d <- bind_rows(d)
 d <- filter(d, is.finite(wind_fwd))
 
@@ -37,13 +44,33 @@ d <- filter(d, is.finite(wind_fwd))
 #                                 quantile(wind_fwd, .95),
 #                                 wind_fwd))
 #d <- mutate(d, wind_fwd = .995 ^ wind_fwd)
-hist(d$wind_fwd)
-d %>% group_by(id) %>% summarize(size = sum(wind_fwd, na.rm=T)) %>% pull(size) %>% hist()
 
 
 d <- d %>% group_by(id) %>% mutate(size = sum(wind_fwd, na.rm=T)) %>% ungroup() %>%
-      mutate(size=as.integer(factor(size)))
-    
+     mutate(size=as.integer(factor(size)))
+
+# dp <- d %>%
+#       group_by(id) %>% sample_n(1)
+# library(FNN)
+# points <- select(dp, size, iso) %>%
+#       ungroup() %>%
+#       mutate(px = scales::rescale(rank(size), c(1, 10)),
+#              py = scales::rescale(rank(iso), c(1, 10)))
+# ranks <- expand.grid(px=1:10, py=1:10)
+# 
+# for(i in 1:nrow(points)){
+#       dists <- get.knnx(select(points, px, py), select(ranks, px, py), k=1)
+#       target <- which.max(dists$nn.dist)
+#       mover <- dists$nn.index[target]
+#       points$px[mover] <- ranks$px[target]
+#       points$py[mover] <- ranks$py[target]
+# }
+# 
+# points$loc <- paste(letters[points$px], letters[points$py])
+# 
+# dd <- left_join(d, points)
+
+
 
 p <- ggplot() +
       geom_raster(data=d, aes(x, y, fill=wind_fwd)) +
@@ -52,7 +79,9 @@ p <- ggplot() +
       #             color="#290000", alpha=.5, size=1) +
       #geom_vline(data=e[1:n,], aes(xintercept=x), color="white", size=.5) +
       #geom_hline(data=e[1:n,], aes(yintercept=y), color="white", size=.5) +
-      scale_fill_gradientn(colors=c("cyan", "purple", "darkred", "#290000") %>% rev()) +
+      # scale_fill_gradientn(colors=c("cyan", "purple", "darkred", "#290000") %>% rev(),
+      #                      limits=0:1) +
+      scale_fill_viridis_c() +
       guides(fill=guide_colorbar(barwidth=25)) +
       theme_void() + 
       theme(strip.text = element_blank(),
@@ -63,3 +92,20 @@ p <- ggplot() +
       labs(fill="windsheds")
 ggsave("figures/windsheds/tests/examples_timeconv.png", p,
        width=20, height=20, units="in")
+
+
+d %>% group_by(id) %>% 
+      arrange(desc(wind_fwd)) %>% 
+      mutate(wind_cum = cumsum(wind_fwd),
+             wind_cum = wind_cum/max(wind_cum),
+             lat = abs(mean(y)),
+             pix=1:length(wind_cum),
+             pix=pix/max(pix))%>%
+      ggplot(aes(pix, wind_cum, group=id, color=lat)) +
+      geom_line() +
+      scale_color_viridis_c()
+
+
+x=1:1000
+xinv=1/x
+plot(x, cumsum(xinv))
