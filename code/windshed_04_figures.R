@@ -498,12 +498,12 @@ rglplots <- function(){
             y <- 1000 * (1:ncol(z))
             
             library(rgl)
-            r3dDefaults$windowRect = c(0,0,1000,1000)
             open3d()
             rgl.surface(x, -y, z*12, col=wind_color, shininess=128)
             rgl.viewpoint(theta = 180, phi = 45, zoom=.17)
             rgl.clear("lights")
             light3d(phi=15, specular="gray60")
+            par3d("windowRect" = c(0,0,1000,1000))
             snapshot3d(paste0("figures/windsheds/rgl/persp_", drn, ".png"))
             rgl.quit()
       }
