@@ -295,7 +295,8 @@ ggs("figures/windsheds/global/sensitivity.png", p, width=9, height=6, units="in"
                          gp=gpar(fontsize=8, col="red"))
     )
     )
-
+file.copy("figures/windsheds/global/sensitivity.png",
+          "figures/manuscript/SI_fig_sensitivity.png")
 
 
 
