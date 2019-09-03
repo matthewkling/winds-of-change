@@ -210,14 +210,14 @@ cell_area <- function(lon, lat){
 
 
 
-w <- wr <- list.files("E:/wind/cmip5_climatologies/lgm_historic_future/ensemble/", full.names=T) %>%
+w <- wr <- list.files("E:/wind/winds_of_change/cmip5_climatologies/lgm_historic_future/ensemble/", full.names=T) %>%
       stack() %>%
       rotate()
 for(i in 1:nlayers(w)) w[[i]] <- raster::focal(w[[i]], 
                                                matrix(c(0,0,0,3,3,3,0,0,0), nrow=3, byrow=T), 
                                                mean, NAonly=T, na.rm=T)
 names(w) <- names(wr)
-crs(w) <- list.files("E:/wind/cmip5_climatologies/lgm_historic_future/models/", full.names=T)[1] %>%
+crs(w) <- list.files("E:/wind/winds_of_change/cmip5_climatologies/lgm_historic_future/models/", full.names=T)[1] %>%
       raster() %>% crs()
 w <- w %>%
       stack(land) %>%
@@ -228,7 +228,7 @@ w <- w %>%
 
 d <- w %>%
       na.omit() %>%
-      select(-land) %>%
+      dplyr::select(-land) %>%
       gather(stat, value, historical_uas:rcp85_vas) %>%
       separate(stat, c("era", "var")) %>%
       spread(var, value) %>%
@@ -256,7 +256,7 @@ complots <- function(variable, d){
       require(tidyverse)
       require(grid)
       require(gridExtra)
-      
+      select <- dplyr::select
       dv <- filter(d, var==variable)
       
       unit <- switch(variable,
@@ -366,8 +366,8 @@ complots <- function(variable, d){
             scale_color_gradientn(colors=pal,
                                   values=scales::rescale(col_vals),
                                   limits=col_lims) +
-            labs(x=paste0(variable " ", unit, ", LGM"),
-                 y=paste0(variable " ", unit, ", 20th century")) +
+            labs(x=paste0(variable, " ", unit, ", LGM"),
+                 y=paste0(variable, " ", unit, ", 20th century")) +
             theme_minimal() +
             theme(legend.position = "none") +
             style
@@ -378,7 +378,7 @@ complots <- function(variable, d){
                                   values=scales::rescale(col_vals),
                                   limits=col_lims) +
             labs(y=paste0(variable, " ", unit, ", late 21st century"),
-                 x=paste0(variable " ", unit, ", 20th century")) +
+                 x=paste0(variable, " ", unit, ", 20th century")) +
             theme_minimal() +
             theme(legend.position = "none") +
             style
@@ -390,6 +390,18 @@ complots <- function(variable, d){
           width=1000, height=1000)
       grid.draw(p)
       dev.off()
+      
+      source("E:/edges/range-edges/code/utilities.r")
+      ggs(paste0("figures/manuscript/SI_fig_cmip5_", variable, ".png"),
+          p, width=15, height=15, units="in",
+          add = grid.text(letters[1:7], 
+                          x=c(.02, .3533, .6967,
+                              .02, .52,
+                              .02, .52), 
+                          y=c(.91, .91, .91,
+                              .68, .68,
+                              .47, .47),
+                          gp=gpar(fontsize=30, fontface="bold", col="black")))
 }
 
 lapply(unique(d$var), complots, d=d)
