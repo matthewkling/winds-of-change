@@ -302,6 +302,26 @@ plot(compass, vp=viewport(x=.13, y=.33, width=.25, height=.35))
 dev.off()
 
 
+### composite figure for manuscript ####
+
+library(png)
+p1 <- readPNG("figures/tailwinds/wind_direction.png") %>% rasterGrob(interpolate=TRUE)
+p2 <- readPNG("figures/tailwinds/temperature_angle_s3.png") %>% rasterGrob(interpolate=TRUE)
+p3 <- readPNG("figures/tailwinds/alignment_s3.png") %>% rasterGrob(interpolate=TRUE)
+
+pad <- rectGrob(gp=gpar(fill="white", col="white"))
+p <- arrangeGrob(p1, pad, p2, nrow=1, widths=c(60,1,60))
+p <- arrangeGrob(p, pad, p3, ncol=1, heights=c(40, 1, 80))
+
+source("E:/edges/range-edges/code/utilities.r")
+ggs("figures/manuscript/SI_fig_alignment.png",
+    p, width=12, height=9.1, units="in",
+    add = grid.text(letters[1:3], 
+                         x=c(.03, .53, .03), 
+                         y=c(.92, .92, .52),
+                         gp=gpar(fontsize=30, fontface="bold", col="white")))
+
+#######
 
 
 
