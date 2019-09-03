@@ -22,7 +22,7 @@ select <- dplyr::select
 ##infile <- "data/windshed/p1_30y_250km_exp99.csv"
 infile <- "data/windshed/p1_30y_250km_inv.csv"
 
-
+source("E:/edges/range-edges/code/utilities.r")
 
 truncate <- function(x, q=.005, sides=c("high")){
       q <- quantile(x, c(q, 1-q), na.rm=T)
@@ -67,7 +67,7 @@ d <- spread(d, property, value) %>%
       gather(property, value, clim, wind, overlap, windfill)
 
 d <- mutate(d, property = factor(property, levels=c("clim", "wind", "overlap", "windfill"), 
-                                 labels=c("climate\narea", "windshed\narea", "climate-wind\noverlap", "windfill")),
+                                 labels=c("climate\nsimilarity", "wind\naccessibility", "climate-wind\noverlap", "wind\nfacilitation")),
             attr = factor(attr, levels=c("latitude", "elevation", "continentality")))
 
 p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill"), 
@@ -259,11 +259,11 @@ for(var in unique(d$property)){
                       overlap="identity", windfill="identity")
       
       label <- switch(var, 
-                      clim="analog\narea", wind="windshed\nsize", 
-                      overlap="windshed-\nanalog\noverlap", 
-                      windfill="analog\naccessibility")
+                      clim="climate\nsimilarity", wind="wind\naccessibility", 
+                      overlap="climate-wind\noverlap", 
+                      windfill="wind\nfacilitation")
       
-      map <- ggplot(v, aes(x, y, fill=value)) +
+      map0 <- ggplot(v, aes(x, y, fill=value)) +
             facet_grid(direction ~ .) +
             geom_raster() +
             #scale_fill_viridis_c(trans=trans) +
@@ -329,6 +329,21 @@ for(var in unique(d$property)){
       plot(map)
       plot(legend, vp=viewport(x=.12, y=.35, width=.22, height=.44))
       dev.off()
+      
+      # assemble multi-panel figure for SI
+      library(png)
+      img <- paste0("figures/windsheds/global/scatter_windshed_geography_bw_",
+             sub("\\\n", "", label), ".png") %>%
+            readPNG() %>%
+            rasterGrob(interpolate=TRUE)
+      p <- arrangeGrob(map0, img, nrow=2, heights=c(12, 5))
+      
+      ggs(paste0("figures/manuscript/SI_fig_", var, ".png"),
+          p, width=12, height=17, units="in",
+          add = grid.text(letters[1:4], 
+                               x=c(.03, .08, .40, .72), 
+                               y=c(.97, .25, .25, .25),
+                               gp=gpar(fontsize=30, fontface="bold", col="white")))
 }
 
 
@@ -411,7 +426,7 @@ ggs("figures/windsheds/global/windfill_clim.png", p, width=10, height=8, units="
                     y=c(.62, .115, .78, .55, .30, .05),
                     gp=gpar(fontsize=20, fontface="bold", col="black")))
 file.copy("figures/windsheds/global/windfill_clim.png",
-          "figures/manuscript/fig_s4.png", overwrite = T)
+          "figures/manuscript/SI_fig_windfillclim.png", overwrite = T)
 
 # png("figures/windsheds/windfill_clim.png", width=3000, height=2000)
 # grid.draw(p)
@@ -680,6 +695,8 @@ p <- ggplot(data.frame(temp_diff = seq(-10, 10, .1)) %>%
       labs(x = "spatiotemporal temperature difference (°C)",
            y = "similarity score")
 ggsave("figures/windsheds/temp_kernel.png", 
+       width=6, height=4, units="in")
+ggsave("figures/manuscript/SI_fig_tempkernel.png", 
        width=6, height=4, units="in")
 
 
