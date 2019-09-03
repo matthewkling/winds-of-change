@@ -156,7 +156,20 @@ drn <- drn %>%
 sa <- w %>%
       rasterToPoints() %>%
       as.data.frame()
-sa$color <- colormap::colors2d(dplyr::select(sa, speed, anisotropy),
+
+library(geosphere)
+dg <- function(lat) distGeo(c(0, lat), c(1, lat))/1000
+areas <- sa %>% dplyr::select(y) %>% distinct()
+areas$area <- sapply(areas$y, dg)
+
+sa <- sa %>%
+      left_join(areas) %>%
+      arrange(speed) %>%
+      mutate(speedrnk = cumsum(area)) %>%
+      arrange(anisotropy) %>%
+      mutate(anisornk = cumsum(area))
+
+sa$color <- colormap::colors2d(dplyr::select(sa, speedrnk, anisornk),
                                  c("magenta", "cyan", "darkblue", "darkred"),
                                  xtrans="rank", ytrans="rank")
 
@@ -175,10 +188,8 @@ legend <- ggplot(sa, aes(speed, anisotropy)) +
       geom_point(color=sa$color, size=.1) +
       theme_minimal() +
       scale_x_log10(breaks=c(1,2,5,10)) +
-      ylim(0:1) +
-      #theme(text=element_text(size = 25)) +
+      scale_y_sqrt(breaks=c(.02, .2, .5, 1), limits=0:1) +
       labs(x = "speed (m/s)")
-
 
 
 # wind regime cartoons ####################################################
