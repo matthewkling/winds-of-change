@@ -32,11 +32,17 @@ cfsr_rose <- function(infile, outdir, ncores, p){
 }
 
 
-wr_summarize <- function(fd, years, p, outfile){
-      list.files(fd, full.names=T)[1:(72*years)] %>% 
+wr_summarize <- function(fd, years=1980:2009, months=1:12, p, outfile){
+      
+      f <- list.files(fd, full.names=T)
+      yr <- substr(f, nchar(f)-11, nchar(f)-8) %>% as.integer()
+      mo <- substr(f, nchar(f)-7, nchar(f)-6) %>% as.integer()
+      f <- f[yr %in% years & mo %in% months]
+      
+      f %>% 
             lapply(stack) %>%
             Reduce("+", .) %>%
-            "/"(24 * 365 * years) %>% # number of hours
+            "/"(24 * 365/12 * length(months) * length(years)) %>% # number of hours
             "^"(1/p) %>%
             writeRaster(outfile, overwrite=T)
 }
@@ -47,12 +53,51 @@ f <- list.files("f:/CFSR/wnd10m", full.names=T)
 f <- f[!grepl("inv", f)]
 #f <- f[grepl("gdas\\.199404", f)]
 
-
 # velocity
 intdir <- "data/windrose/monthly_p1"
 map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=1)
-wr_summarize(intdir, years=30, p=1, 
+wr_summarize(intdir, p=1, 
              outfile="data/windrose/windrose_p1_1980_2009.tif")
+
+# seasonal versions
+wr_summarize(intdir, months=c(12, 1, 2), p=1, 
+             outfile="data/windrose/windrose_p1_DJF.tif")
+wr_summarize(intdir, months=c(3:5), p=1, 
+             outfile="data/windrose/windrose_p1_MAM.tif")
+wr_summarize(intdir, months=c(6:8), p=1, 
+             outfile="data/windrose/windrose_p1_JJA.tif")
+wr_summarize(intdir, months=c(9:11), p=1, 
+             outfile="data/windrose/windrose_p1_SON.tif")
+
+
+
+
+
+
+
+# at 1000 hPa
+f <- list.files("f:/CFSR/wnd1000", full.names=T)
+f <- f[!grepl("inv", f)]
+intdir <- "data/windrose/monthly_p1_wnd1000"
+map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=1)
+wr_summarize(intdir, p=1, outfile="data/windrose/windrose_p1_wnd1000.tif")
+
+# at 850 hPa
+f <- list.files("f:/CFSR/wnd850", full.names=T)
+f <- f[!grepl("inv", f)]
+intdir <- "data/windrose/monthly_p1_wnd850"
+map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=1)
+wr_summarize(intdir, p=1, outfile="data/windrose/windrose_p1_wnd850.tif")
+
+
+
+
+
+
+
+
+
+
 
 # drag
 intdir <- "data/windrose/monthly_p2"
