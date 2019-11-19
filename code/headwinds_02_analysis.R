@@ -85,7 +85,7 @@ for(neigh in neighborhoods){
       land <- raster("f:/cfsr/land.tif")
       s <- stack(s, cr(land))
       
-      
+      writeRaster(s, paste0("data/alignment/alignment_s", neigh, ".tif"), overwrite=T)
       
       ###########
       
