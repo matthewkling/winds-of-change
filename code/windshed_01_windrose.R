@@ -34,13 +34,13 @@ cfsr_rose <- function(infile, outdir, ncores, p){
 
 
 wr_summarize <- function(fd, years=1980:2009, months=1:12, p, outfile){
-   
    f <- list.files(fd, full.names=T)
    yr <- substr(f, nchar(f)-11, nchar(f)-8) %>% as.integer()
    mo <- substr(f, nchar(f)-7, nchar(f)-6) %>% as.integer()
    f <- f[yr %in% years & mo %in% months]
    if(length(f) %% (length(years) * length(months)) != 0) stop("non-factorial data")
    
+   p <- ifelse(p==0, 1, p)
    f %>% 
       lapply(stack) %>%
       Reduce("+", .) %>%
@@ -94,7 +94,7 @@ map(f, possibly(cfsr_rose, NULL), outdir=intdir, ncores=6, p=3)
 wr_summarize(intdir, p=3, outfile="data/windrose/windrose_p3_wnd10m.tif")
 
 # multiple atmospheric heights
-for(height in c("wnd1000", "wnd850", "wnd700", "wnd500")){
+for(height in c("wnd1000", "wnd850", "wnd700")){
    outfile <- paste0("data/windrose/windrose_p1_", height, ".tif")
    if(file.exists(outfile)) next()
    
