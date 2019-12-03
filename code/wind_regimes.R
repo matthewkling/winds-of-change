@@ -170,8 +170,7 @@ sa <- sa %>%
       mutate(anisornk = cumsum(area))
 
 sa$color <- colormap::colors2d(dplyr::select(sa, speedrnk, anisornk),
-                                 c("magenta", "cyan", "darkblue", "darkred"),
-                                 xtrans="rank", ytrans="rank")
+                               c("red", "yellow", "cyan", "blue"))
 
 map <- ggplot() +
       geom_raster(data=sa, aes(x, y), fill = sa$color) +
@@ -184,11 +183,22 @@ map <- ggplot() +
                       ylim=c(-90, 90),
                       expand = 0)
 
+lt <- summarize_at(sa, vars(speed, anisotropy), funs(min, max))
+
 legend <- ggplot(sa, aes(speed, anisotropy)) +
       geom_point(color=sa$color, size=.1) +
+      annotate(geom="text",
+               label=c("high\nspeeds &\nconsistent\ndirection", "high\nspeeds &\nvariable\ndirection", 
+                       "low\nspeeds &\nvariable\ndirection", "low\nspeeds &\nconsistent\ndirection"),
+               color="black", 
+               x=c(lt$speed_max, lt$speed_max, lt$speed_min, lt$speed_min),
+               y=c(lt$anisotropy_max, lt$anisotropy_min, lt$anisotropy_min, lt$anisotropy_max),
+               hjust=c(1,1,0,0),
+               vjust=c(1,0,0,1),
+               lineheight=.7) +
       theme_minimal() +
       scale_x_log10(breaks=c(1,2,5,10)) +
-      scale_y_sqrt(breaks=c(.02, .2, .5, 1), limits=0:1) +
+      scale_y_sqrt(breaks=c(.02, .2, .5, 1)) +
       labs(x = "speed (m/s)")
 
 
@@ -307,7 +317,8 @@ cartoons <- ggplot(d) +
 # final composite figure ##################################################
 
 library(gridExtra)
-p <- arrangeGrob(cartoons, legend, nrow=1, widths=c(3, 1.2))
+map2 <- rasterGrob("")
+p <- arrangeGrob(cartoons, legend, nrow=1, widths=c(3, 1.3))
 p <- arrangeGrob(p, map, ncol=1, heights=c(1, 2))
 ggsave("figures/tailwinds/speed_isotropy_direction.png", p, width=12, height=9, units="in")
 
@@ -317,3 +328,7 @@ ggs("figures/manuscript/fig_1.png", p, width=12, height=9, units="in",
                   x=c(.02, .72, .02), 
                   y=c(.965, .965, .62),
                   gp=gpar(fontsize=25, fontface="bold", col="black")))
+
+
+
+
