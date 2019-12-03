@@ -800,9 +800,17 @@ for(drn in c("inbound", "outbound")){
     mutate(isotropy=truncate(isotropy),
            windfill = truncate(windfill, .001, c("high", "low"))) %>%
     
-    mutate(syndrome = case_when(ecdf(clim)(clim) < .5 ~ "climate-limited",
-                                ecdf(windfill)(windfill) > .5 ~ "wind-facilitated",
-                                ecdf(isotropy)(isotropy) > .5 ~ "speed-hindered",
+    left_join(areas) %>%
+    arrange(clim) %>%
+    mutate(climrnk = cumsum(area)) %>%
+    arrange(windfill) %>%
+    mutate(windfillrnk = cumsum(area)) %>%
+    arrange(isotropy) %>%
+    mutate(isotropyrnk = cumsum(area)) %>%
+    
+    mutate(syndrome = case_when(climrnk < mean(climrnk) ~ "climate-limited",
+                                windfillrnk > mean(windfillrnk) ~ "wind-facilitated",
+                                isotropyrnk > mean(isotropyrnk) ~ "speed-hindered",
                                 TRUE ~ "direction-hindered"))
   
   
@@ -819,7 +827,7 @@ for(drn in c("inbound", "outbound")){
   ggsave(paste0("figures/windsheds/global/syndrome_", drn, ".png"), 
       width=8, height=4, units="in")
   
-  d <- d %>% mutate(color = colors2d(cbind(rank(.$isotropy), rank(.$windfill)),
+  d <- d %>% mutate(color = colors2d(cbind(.$isotropyrnk, .$windfillrnk),
                                      c("black", "yellow", "magenta", "black")))
   
   ggplot(d, aes(x, y, alpha=rank(clim), fill=syndrome)) +
