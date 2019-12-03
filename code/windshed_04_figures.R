@@ -813,10 +813,11 @@ for(drn in c("inbound", "outbound")){
                                 isotropyrnk > mean(isotropyrnk) ~ "speed-hindered",
                                 TRUE ~ "direction-hindered"))
   
+  palette <- c("white", "red", "gold", "black")
   
   map <- ggplot(d, aes(x, y, fill=syndrome)) +
     geom_raster() +
-    scale_fill_manual(values=c("white", "magenta", "yellow", "black")) +
+    scale_fill_manual(values=palette) +
     scale_x_continuous(expand=c(0,0)) +
     scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
     theme_void() +
@@ -827,14 +828,15 @@ for(drn in c("inbound", "outbound")){
   ggsave(paste0("figures/windsheds/global/syndrome_", drn, ".png"), 
       width=8, height=4, units="in")
   
-  d <- d %>% mutate(color = colors2d(cbind(.$isotropyrnk, .$windfillrnk),
-                                     c("black", "yellow", "magenta", "black")))
   
-  ggplot(d, aes(x, y, alpha=rank(clim), fill=syndrome)) +
+  d <- d %>% mutate(color = colors2d(cbind(.$isotropyrnk, .$windfillrnk),
+                                     palette[c(4,3,2,4)]))
+  
+  p <- ggplot(d, aes(x, y, alpha=rank(clim), fill=syndrome)) +
     geom_raster() +
-    geom_raster(fill="white", alpha=1) + # color for climate-limited
+    geom_raster(fill=palette[1], alpha=1) + # color for climate-limited
     geom_raster(fill=d$color) +
-    scale_fill_manual(values=c("white", "magenta", "yellow", "black")) +
+    scale_fill_manual(values=palette) +
     scale_alpha_continuous(range=0:1, guide="none") +
     scale_x_continuous(expand=c(0,0)) +
     scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
@@ -843,6 +845,7 @@ for(drn in c("inbound", "outbound")){
           legend.title = element_blank(),
           legend.text = element_text(color="black"),
           panel.background = element_rect(fill="gray75"))
+  p
   ggsave(paste0("figures/windsheds/global/syndrome_cont_", drn, ".png"), 
          width=8, height=4, units="in")
   
