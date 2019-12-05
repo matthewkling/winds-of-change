@@ -31,6 +31,7 @@ truncate <- function(x, q=.005, sides=c("high")){
   x
 }
 
+
 ### correlations between geography and windshed stats
 
 # geographic and windshed attributes
@@ -532,178 +533,6 @@ areas <- d %>% select(y) %>% distinct()
 areas$area <- sapply(areas$y, dg)
 
 
-### 3d surface with RGL 
-rglplots <- function(){
-  
-  ext <- extent(c(-160, -70, 0, 80))
-  
-  elev <- raster("F:/chelsa/elevation/mn30_grd/w001001.adf") %>% 
-    crop(ext) %>%
-    aggregate(3) %>%
-    focal(matrix(1, 5, 5), mean, na.rm=T)
-  
-  f <- read_csv(infile) %>%
-    select(-runtime) %>%
-    gather(var, value, -x, -y) %>%
-    separate(var, c("property", "direction", "moment", "stat"), sep="_") %>%
-    mutate(direction = ifelse(direction=="fwd", "outbound", "inbound"))
-  
-  d <- f %>%
-    filter(moment == "windshed",
-           stat == "size") %>%
-    spread(property, value) %>%
-    mutate(windfill = overlap / clim) %>%
-    gather(property, value, clim, wind, overlap, windfill)
-  
-  
-  for(drn in unique(d$direction)){
-    
-    pal <- c("forestgreen", "yellow", "red", "darkblue")
-    
-    dd <- d %>%
-      filter(direction==drn) %>%
-      select(-moment, -stat) %>%
-      spread(property, value) %>%
-      mutate(windfill = truncate(windfill)) %>%
-      filter(is.finite(clim), is.finite(windfill)) %>%
-      mutate(clim = truncate(clim, .001),
-             windfill = truncate(windfill, .001, c("high", "low"))) %>%
-      
-      left_join(areas) %>%
-      arrange(clim) %>%
-      mutate(climrnk = cumsum(area)) %>%
-      arrange(windfill) %>%
-      mutate(windfillrnk = cumsum(area)) %>%
-      
-      mutate(color = colors2d(cbind(.$climrnk, .$windfillrnk), pal))
-    
-    cst <- dd %>%
-      filter(x >= ext@xmin, x <= ext@xmax, y >= ext@ymin, y <= ext@ymax)
-    cst <- expand.grid(x=unique(cst$x), y=unique(cst$y)) %>%
-      left_join(cst) %>%
-      mutate(color=ifelse(is.na(color), "white", color)) %>%
-      arrange(-y, x)
-    
-    dem <- stack("data/geographic/processed/elevation.tif") %>% crop(ext)
-    #wind_color <- matrix(cst$color, nrow=nrow(dem), byrow=T)
-    crgb <- col2rgb(cst$color)
-    
-    clr <- stack(dem, dem, dem)
-    clr[[1]][] <- crgb[1,]
-    clr[[2]][] <- crgb[2,]
-    clr[[3]][] <- crgb[3,]
-    clr <- resample(clr, elev)
-    clr <- trim(clr) %>% reclassify(c(-Inf, 0, 0, 255, Inf, 255))
-    elev <- crop(elev, clr)
-    
-    clr <- rgb(values(clr), maxColorValue = 255)
-    wind_color <- matrix(clr, nrow=nrow(elev), byrow=T) %>% t()
-    demm <- matrix(values(elev), nrow=nrow(elev), byrow=T) %>% t()
-    wind_color[demm<=0] <- "white"
-    
-    z <- demm
-    x <- -1000 * (1:nrow(z))
-    y <- 1000 * (1:ncol(z))
-    
-    library(rgl)
-    open3d()
-    rgl.surface(x, -y, z*12, col=wind_color, shininess=128)
-    rgl.viewpoint(theta = 180, phi = 45, zoom=.17)
-    rgl.clear("lights")
-    light3d(phi=15, specular="gray60")
-    par3d("windowRect" = c(0,0,1000,1000))
-    snapshot3d(paste0("figures/windsheds/rgl/persp_", drn, ".png"))
-    rgl.quit()
-  }
-  
-  
-  ###############
-  
-  for(drn in unique(d$direction)){
-    
-    d <- f %>%
-      filter(direction == drn,
-             moment == "windshed",
-             stat == "size") %>%
-      spread(property, value) %>%
-      mutate(windfill = overlap / clim)
-    d <- f %>%
-      filter(direction == drn,
-             moment == "windshed",
-             property == "wind",
-             stat == "isotropy") %>%
-      rename(isotropy = value) %>%
-      select(x, y, isotropy) %>%
-      left_join(d, .) %>%
-      
-      filter(is.finite(windfill),
-             is.finite(clim),
-             is.finite(isotropy)) %>%
-      mutate(isotropy=truncate(isotropy),
-             windfill = truncate(windfill, .001, c("high", "low"))) %>%
-      
-      left_join(areas) %>%
-      arrange(clim) %>%
-      mutate(climrnk = cumsum(area)) %>%
-      arrange(windfill) %>%
-      mutate(windfillrnk = cumsum(area)) %>%
-      arrange(isotropy) %>%
-      mutate(isotropyrnk = cumsum(area)) %>%
-      
-      mutate(syndrome = case_when(climrnk < mean(climrnk) ~ "climate-limited",
-                                  windfillrnk > mean(windfillrnk) ~ "wind-facilitated",
-                                  isotropyrnk > mean(isotropyrnk) ~ "speed-hindered",
-                                  TRUE ~ "direction-hindered"))
-    
-    palette <- c("white", "red", "gold", "black")
-    d <- d %>% mutate(color = colors2d(cbind(.$isotropyrnk, .$windfillrnk),
-                                       palette[c(4,3,2,4)]))
-    
-    cst <- d %>%
-      filter(x >= ext@xmin, x <= ext@xmax, y >= ext@ymin, y <= ext@ymax)
-    cst <- expand.grid(x=unique(cst$x), y=unique(cst$y)) %>%
-      left_join(cst) %>%
-      mutate(color=ifelse(is.na(color), "white", color)) %>%
-      arrange(-y, x)
-    
-    dem <- stack("data/geographic/processed/elevation.tif") %>% crop(ext)
-    #wind_color <- matrix(cst$color, nrow=nrow(dem), byrow=T)
-    crgb <- col2rgb(cst$color)
-    
-    crgb <- rbind(crgb, cst$climrnk/max(cst$climrnk, na.rm=T)) %>%
-      apply(2, function(x){if(any(is.na(x))) return(rep(255, 3))
-                          return(255 - ((255 - x[1:3]) * x[4]))})
-    
-    clr <- stack(dem, dem, dem)
-    clr[[1]][] <- crgb[1,]
-    clr[[2]][] <- crgb[2,]
-    clr[[3]][] <- crgb[3,]
-    clr <- resample(clr, elev)
-    clr <- trim(clr) %>% reclassify(c(-Inf, 0, 0, 255, Inf, 255))
-    elev <- crop(elev, clr)
-    
-    clr <- rgb(values(clr), maxColorValue = 255)
-    wind_color <- matrix(clr, nrow=nrow(elev), byrow=T) %>% t()
-    demm <- matrix(values(elev), nrow=nrow(elev), byrow=T) %>% t()
-    wind_color[demm<=0] <- "white"
-    
-    z <- demm
-    x <- -1000 * (1:nrow(z))
-    y <- 1000 * (1:ncol(z))
-    
-    library(rgl)
-    open3d()
-    rgl.surface(x, -y, z*12, col=wind_color, shininess=128)
-    rgl.viewpoint(theta = 180, phi = 45, zoom=.17)
-    rgl.clear("lights")
-    light3d(phi=15, specular="gray60")
-    par3d("windowRect" = c(0,0,1000,1000))
-    snapshot3d(paste0("figures/windsheds/rgl/syndrome_", drn, ".png"))
-    rgl.quit()
-  }
-
-}
-rglplots()
 
 
 
@@ -786,7 +615,7 @@ for(drn in c("inbound", "outbound")){
                     "wind-accessibility of analog area\n\n<--- hindrance --------------------------- facilitation --->"))
   
   library(png)
-  img <- readPNG(paste0("figures/windsheds/rgl/persp_", drn, ".png"))
+  img <- readPNG(paste0("figures/windsheds/rgl/climwind_", drn, ".png"))
   img <- apply(img, c(1, 2), function(x){if(mean(x)>.75){return(c(1,1,1))}; return(x)})
   img <- aperm(img, c(2, 3, 1))
   img <- rasterGrob(img, interpolate=TRUE)
