@@ -122,6 +122,8 @@ ex <- c(601, 668, 818, 562)
 ed <- d %>%
    filter(id %in% ex) %>%
    mutate(id = factor(id, levels = ex))
+saveRDS(ed, "figures/regimes/example_data.rds")
+
 centroids <- ed %>%
    group_by(id) %>%
    summarize(u = mean(u), v = mean(v))
