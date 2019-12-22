@@ -13,6 +13,7 @@ library(gridExtra)
 library(ecoclim)
 library(scales)
 library(rgl)
+library(patchwork)
 
 select <- dplyr::select
 
@@ -527,7 +528,6 @@ file.copy("figures/windsheds/global/windfill_clim.png",
 # dev.off()
 
 
-library(geosphere)
 dg <- function(lat) distGeo(c(0, lat), c(1, lat))/1000
 areas <- d %>% select(y) %>% distinct()
 areas$area <- sapply(areas$y, dg)
@@ -697,6 +697,10 @@ for(drn in c("inbound", "outbound")){
 
 for(drn in c("inbound", "outbound")){
   
+  dg <- function(lat) distGeo(c(0, lat), c(1, lat))/1000
+  areas <- f %>% select(y) %>% distinct()
+  areas$area <- sapply(areas$y, dg)
+  
   d <- f %>%
     filter(direction == drn,
            moment == "windshed",
@@ -739,18 +743,38 @@ for(drn in c("inbound", "outbound")){
     scale_x_continuous(expand=c(0,0)) +
     scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
     theme_void() +
-    theme(legend.position=c(.15, .3),
+    theme(legend.position=c(.12, .35),
           legend.text = element_text(color="black"),
           panel.background = element_rect(fill="gray75")) +
-    labs(fill = drn)
+    labs(fill = paste0(drn, "\nsyndrome"))
   ggsave(paste0("figures/windsheds/global/syndrome_", drn, ".png"), 
          width=8, height=4, units="in")
   
+  hist <- d %>%
+    mutate(y = round(y)) %>%
+    group_by(y, syndrome) %>%
+    summarize(n = sum(area)) %>%
+    ggplot(aes(x=y, y=n, fill=syndrome)) +
+    geom_histogram(stat="identity", position="fill", width=1, binwidth=5) +
+    coord_flip() +
+    scale_fill_manual(values=palette) +
+    scale_y_continuous(expand=c(0,0)) +
+    scale_x_continuous(expand=c(0,0), limits=c(-90, 90), 
+                       breaks=seq(-90, 90, 30), position="top") +
+    #theme_void() +
+    theme(legend.position="none",
+          panel.grid=element_blank(),
+          panel.background = element_rect(fill="gray75")) +
+    labs(y = "proportion of area", x = NULL)
+  
+  p <- map + hist + plot_layout(widths=c(4, 1))
+  ggsave(paste0("figures/windsheds/global/syndrome_", drn, "_hist.png"), p,
+         width=10, height=4.5, units="in")
   
   d <- d %>% mutate(color = colors2d(cbind(.$isotropyrnk, .$windfillrnk),
                                      palette[c(4,3,2,4)]))
   
-  p <- ggplot(d, aes(x, y, alpha=climrnk, fill=syndrome)) +
+  map <- ggplot(d, aes(x, y, alpha=climrnk, fill=syndrome)) +
     geom_raster() +
     geom_raster(fill=palette[1], alpha=1) + # color for climate-limited
     geom_raster(fill=d$color) +
@@ -759,12 +783,36 @@ for(drn in c("inbound", "outbound")){
     scale_x_continuous(expand=c(0,0)) +
     scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
     theme_void() +
-    theme(legend.position=c(.15, .3),
+    theme(legend.position=c(.12, .35),
           legend.text = element_text(color="black"),
           panel.background = element_rect(fill="gray75")) +
-    labs(fill = drn)
+    labs(fill = paste0(drn, "\nsyndrome"))
   ggsave(paste0("figures/windsheds/global/syndrome_cont_", drn, ".png"), 
          width=8, height=4, units="in")
+  
+  p <- map + hist + plot_layout(widths=c(4, 1))
+  ggsave(paste0("figures/windsheds/global/syndrome_cont_", drn, "_hist.png"), p,
+         width=10, height=4.5, units="in")
+  
+  if(drn == "inbound"){
+    map_in <- map
+    hist_in <- hist
+  }
+  if(drn == "outbound"){
+    stop()
+    hist <- hist + theme(axis.text.x=element_blank(), 
+                   axis.title.x=element_blank(),
+                   axis.ticks.x=element_blank())
+    patch <- map + hist + map_in + hist_in + 
+      plot_layout(nrow=2, widths=c(4, 1), heights=c(1,1))
+    ggs(paste0("figures/windsheds/global/syndrome_cont_hist.png"), 
+        patch, width=10, height=9, units="in",
+        add = grid.text(letters[1:4], 
+                        x=c(.03, .93, .03, .93), 
+                        y=c(.96, .96, .49, .49),
+                        gp=gpar(fontsize=25, fontface="bold", col="black")))
+  }
+  
 }
 
 
