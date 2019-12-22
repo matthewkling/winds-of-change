@@ -392,7 +392,7 @@ sensitivity_plot(ws, maintag="inv", comptag="exp95",
                  title="Sensitivity to accessibility function",
                  outfile="figures/windsheds/global/sensitivity_scatters_access.png",
                  height=2)
-sensitivity_plot(ws, maintag="inv", comptag="exp95",
+sensitivity_plot(ws %>% na.omit(), maintag="inv", comptag="exp95",
                  title="Sensitivity to accessibility function", log=T,
                  outfile="figures/windsheds/global/sensitivity_scatters_access_log.png",
                  height=2)
