@@ -399,7 +399,7 @@ sensitivity_plot(ws %>% na.omit(), maintag="inv", comptag="exp95",
 curves <- map_df(fx$access, 
                  function(fun) data.frame(name=fun$name, fun=fun$form, 
                                           x = 1:1000, y = fun$fx(1:1000))) %>%
-  ggplot(aes(x, y, color=fun)) + 
+  ggplot(aes(x, y, color=paste0("\"", name, "\": ", fun))) + 
   geom_line() +
   theme_minimal() +
   ylim(0, 1) +
@@ -448,9 +448,8 @@ p <- ggplot(d, aes(comp, main, color = tag==maintag)) +
   scale_x_log10() + scale_y_log10() +
   theme_minimal() +
   theme(legend.position = "none") +
-  labs(#title=title,
-    x="Facilitation ratio (alternative parameter)",
-    y="Facilitation ratio\n(main parameter)")
+  labs(x="Facilitation ratio",
+       y=paste0("Facilitation ratio for ", maintag))
 ggsave(outfile, p, width=8, height=height, units="in")
 
 afun <- function(method = "gaussian", sigma = 1){
