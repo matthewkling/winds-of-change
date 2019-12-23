@@ -449,7 +449,7 @@ p <- ggplot(d, aes(comp, main, color = tag==maintag)) +
   theme_minimal() +
   theme(legend.position = "none") +
   labs(x="Facilitation ratio",
-       y=paste0("Facilitation ratio for ", maintag))
+       y=paste0("Facilitation ratio for Gaussian with breadth = 2"))
 ggsave(outfile, p, width=8, height=height, units="in")
 
 afun <- function(method = "gaussian", sigma = 1){
