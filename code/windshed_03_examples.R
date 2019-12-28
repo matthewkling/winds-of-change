@@ -20,7 +20,7 @@ select <- dplyr::select
 stop("get functions and input datasets from windshed_02_analysis script")
 
 
-f <- read_csv("data/windshed/p2_500km.csv") %>%
+f <- read_csv("data/windshed/p1_30y_250km_inv.csv") %>%
       select(-runtime) %>%
       gather(var, value, -x, -y) %>%
       separate(var, c("property", "direction", "moment", "stat"), sep="_")
@@ -28,7 +28,7 @@ f <- read_csv("data/windshed/p2_500km.csv") %>%
 
 
 woc <- function(x, y, windrose, climate, 
-                radius = 1000, time_conv=identity,
+                radius = 250, time_conv=identity,
                 sigma = 2,
                 output = "summary"){
       #browser()
@@ -93,6 +93,25 @@ woc <- function(x, y, windrose, climate,
 }
    
 
+
+
+
+# load current/future climate data
+climate <- stack("data/geographic/processed/temperature.tif") %>% unwrap(180)
+
+# load land data
+land <- raster("f:/cfsr/land.tif") %>% 
+   rotate() %>% unwrap(180)
+
+# load windrose data
+rose <- stack("data/windrose/windrose_p1_wnd10m.tif") %>%
+   rotate() %>% unwrap(180)
+
+# downweight conductance over water
+rose <- land %>%
+   reclassify(c(NA, NA, water)) %>% # weight=.1 makes it possible to cross narrow waterways
+   "*"(rose)
+
 #### some random examples ####
 
 em <- data.frame(x=c(98.12386, 143.43630,  -66.25091, -38.12595, 
@@ -111,11 +130,10 @@ e <- f %>%
       mutate(id = 1:nrow(.))
 
 time_conv <- identity
-time_conv <- identity
 
 r <- map2(e$x, e$y, possibly(woc, NULL), 
           windrose=rose, climate=climate, 
-          time_conv=time_conv, radius=500,
+          time_conv=time_conv, radius=250,
           output="rasters")
 
 
@@ -292,12 +310,15 @@ e <- d %>%
       mutate(id = 1:nrow(.))
 
 r <- map2(e$x, e$y, possibly(woc, NULL), 
-          windrose=rose, climate=climate, cost_to_flow=cost_to_flow, radius=500,
+          windrose=rose, climate=climate, 
+          time_conv=time_conv, radius=500,
           output="rasters")
+
 
 d <- r %>% lapply(rasterToPoints) %>% lapply(as.data.frame)
 for(i in 1:length(d)) d[[i]]$id <- e$id[i]
-d <- bind_rows(d)
+d <- bind_rows(d) %>%
+   filter(is.finite(clim_fwd), is.finite(wind_fwd))
 
 d$color <- colors2d(select(d, clim_fwd, wind_fwd),
                     c("green", "gold", "black", "cyan"))
@@ -306,7 +327,7 @@ maps <- ggplot(d, aes(x, y)) +
       geom_raster(fill=d$color) +
       facet_wrap(~ id, nrow=4, scales="free") +
       theme_void()
-ggsave("figures/windsheds/archetype_candidates.png", maps, width=10, height=5, units="in")
+ggsave("figures/windsheds/archetype_candidates_v2.png", maps, width=10, height=5, units="in")
 
 
 # identify archetypes, get data, plot
