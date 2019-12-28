@@ -395,7 +395,7 @@ for(drn in c("inbound", "outbound")){
        add = grid.text(letters[1:4], 
                        x=c(.02, .275, .02, .275), 
                        y=c(.97, .97, .58, .58),
-                       gp=gpar(fontsize=25, fontface="bold", col="black")))
+                       gp=gpar(fontsize=20, fontface="bold", col="black")))
    
    file.copy(outfile, paste0("figures/manuscript/", basename(outfile)), overwrite = T)
    
