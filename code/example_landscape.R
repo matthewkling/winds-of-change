@@ -39,7 +39,8 @@ d <-  r %>%
 
 pointsize <- 2
 
-keys <- guides(fill = guide_colourbar(barwidth=5, barheight=.5, title.position="top", title.hjust = 0.5))
+keys <- guides(fill = guide_colourbar(barwidth=5, barheight=.5, 
+                                      title.position="top", title.hjust = 0.5))
 style <- theme(legend.position="top",
                strip.text.y=element_text(angle=-90, size=10),
                strip.text.x=element_blank())
@@ -67,19 +68,21 @@ time <- d %>%
 
 access <- d %>% 
   ggplot() +
-  geom_raster(aes(x, y, fill=windr^.5)) +
+  geom_raster(aes(x, y, fill=windr)) +
   facet_grid(direction ~ .) + 
   theme_void() + style + keys + origins +
-  scale_fill_gradientn(colours=c("black", "cyan")) +
+  scale_fill_gradientn(colours=c("black", "cyan"), trans="sqrt", 
+                       limits=c(0, NA), breaks=c(0, .01, .04)) +
   labs(fill = "Accessibility (1/h)")
 
 overlap <- d %>% mutate(direction = factor(direction, levels=c("fwd", "rev"),
                                            labels=c("Outbound", "Inbound"))) %>%
   ggplot() +
-  geom_raster(aes(x, y, fill=overlap^.5)) +
+  geom_raster(aes(x, y, fill=overlap)) +
   facet_grid(direction ~ .) + 
   theme_void() + style + keys + origins +
-  scale_fill_gradientn(colours=c("black", "green")) +
+  scale_fill_gradientn(colours=c("black", "green"), trans="sqrt",
+                       limits=c(0, NA), breaks=c(0, .01, .04)) +
   labs(fill = "Overlap (1/h)") +
   theme(strip.text = element_text(size=14, angle=-90))
 
@@ -98,7 +101,7 @@ key <- ggplot() +
   geom_polygon(data=md, aes(long, lat, group=group),
                fill="gray30") +
   geom_polygon(data=fortify(circle), aes(long, lat, group=group), 
-               fill="cyan") +
+               fill="white") +
   geom_point(data=ff[i,c("x", "y")], 
              aes(x, y), color="red", size=pointsize/2) +
   coord_map(projection="ortho", 
@@ -118,7 +121,8 @@ temp <- ggplot() +
   geom_raster(data=td, aes(x, y, fill=layer.1)) +
   geom_point(data=ff[i,c("x", "y")], 
              aes(x, y), color="red", size=pointsize) +
-  scale_fill_gradientn(colors=c("cyan", "blue", "purple", "red", "orange", "gold", "yellow")) +
+  scale_fill_gradientn(colors=c("cyan", "blue", "purple", "red", "orange", "gold", "yellow"),
+                       breaks=c(10, 14, 18)) +
   theme_void() +
   theme_void() + theme(legend.position="top", legend.title = element_text(size=10)) + 
   guides(fill = guide_colourbar(barwidth=5, barheight=.5, title.position="top", title.hjust = 0.5)) +
@@ -130,12 +134,14 @@ temp <- ggplot() +
 p <- (temp / key) | clim | time | access | overlap 
 
 source("E:/edges/range-edges/code/utilities.r")
+
 ggs("figures/manuscript/fig_3.png", 
-    p, width=8.5, height=4, units="in", 
-    add=grid.text(letters[1:10], 
-                  x=rep(seq(.02, .82, length.out=5), each=2), 
-                  y=rep(c(.8, .37), 5),
-                  gp=gpar(fontsize=12, fontface="bold", col="black")))
-
-
+    p, width=8.5, height=4.3, units="in", 
+    add=list(grid.text(letters[1:10], 
+                  x=rep(seq(.04, .8, length.out=5), each=2), 
+                  y=rep(c(.8, .39), 5),
+                  gp=gpar(fontsize=12, fontface="bold", col="black")),
+             grid.rect(x=.608, y=c(.24, .65), width=.78, height=.39,
+                      gp=gpar(col="black", fill=rgb(1,1,1,0), lwd=.25))
+             ))
 
