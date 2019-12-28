@@ -20,7 +20,6 @@ analogs <- function(climate, # raster stack of first, second timesteps
                     # gaussian = standard deviation, triangular = delta of half suitability,
                     # threshold = cutoff
 ){
-  browser()
   if(reverse) climate <- climate[[2:1]]
   coords <- matrix(coords, ncol=2)
   target <- raster::extract(climate[[1]], coords)
