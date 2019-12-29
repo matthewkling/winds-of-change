@@ -472,15 +472,15 @@ lgnd <- ggplot(dd, aes(clim, windfill)) +
   theme_minimal() +
   theme(strip.text=element_blank()) +
   labs(x = "Climate availability",
-       y = "Wind facilitation")
+       y = "Wind facilitation (1/h)")
 
 sd <- d %>%
   select(-moment, -stat) %>%
   filter(property %in% c("clim", "wind", "overlap")) %>%
   mutate(property = factor(property, levels=c("clim", "wind", "overlap"),
                            labels=c("Climate  \navailability  ",
-                                    "Wind  \naccessibility  ",
-                                    "Wind-analog  \noverlap  "))) %>%
+                                    "Wind  \naccessibility  \n(1/h)  ",
+                                    "Wind-climate  \noverlap  \n(1/h)  "))) %>%
   group_by(property) %>%
   mutate(value = ifelse(grepl("overlap", property), truncate(value), value)) %>%
   ungroup() %>%
@@ -494,7 +494,7 @@ tsd <- sd %>%
             inbound = max(inbound),
             outbound = max(range(outbound)))
 
-scat <- sd %>% #sample_n(5000) %>%
+scat <- sd %>% #sample_n(500) %>%
   ggplot(aes(outbound, inbound)) +
   facet_wrap(~property, ncol=1, scales="free") +
   geom_point(size=.25, alpha=.05) +
@@ -505,7 +505,11 @@ scat <- sd %>% #sample_n(5000) %>%
   theme_minimal() +
   theme(strip.text=element_blank()) +
   labs(x="outbound",
-       y="inbound")
+       y="inbound") +
+  scale_x_continuous(labels=function(x) ifelse(x %in% c(0.0025, 0.0075, .0125), "", x),
+                     limits = c(0, NA)) +
+  scale_y_continuous(labels=function(x) ifelse(x %in% c(0.0025, 0.0075, .0125), "", x),
+                     limits = c(0, NA))
 
 p <- arrangeGrob(lgnd, scat, ncol=1, heights=c(1, 3))
 p <- arrangeGrob(map, p, ncol=2, widths=c(4, 1))
@@ -520,9 +524,6 @@ ggs("figures/windsheds/global/windfill_clim.png",
 file.copy("figures/windsheds/global/windfill_clim.png",
           "figures/manuscript/SI_fig_windfillclim.png", overwrite = T)
 
-# png("figures/windsheds/windfill_clim.png", width=3000, height=2000)
-# grid.draw(p)
-# dev.off()
 
 
 dg <- function(lat) distGeo(c(0, lat), c(1, lat))/1000
