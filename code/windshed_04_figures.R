@@ -465,26 +465,22 @@ map <- ggplot(dd, aes(x, y)) +
             hjust=0, size=6, lineheight=.75) +
   ylim(-90, 90) +
   theme_void() +
-  #theme(strip.text=element_text(size=50, angle=-90)) +
   theme(strip.text=element_blank())
-legend <- ggplot(dd, aes(clim, windfill)) +
+lgnd <- ggplot(dd, aes(clim, windfill)) +
   geom_point(color=dd$color, size=.2) +
-  #scale_y_log10(breaks=c(.001, .003, .01, .03, .1, .3, 1)) +
   xlim(0, .75) +
   theme_minimal() +
-  theme(#text=element_text(size = 45),
-    strip.text=element_blank()) +
-  labs(x = "climate similarity",
-       y = "wind facilitation")
-
+  theme(strip.text=element_blank()) +
+  labs(x = "Climate availability",
+       y = "Wind facilitation")
 
 sd <- d %>%
   select(-moment, -stat) %>%
   filter(property %in% c("clim", "wind", "overlap")) %>%
   mutate(property = factor(property, levels=c("clim", "wind", "overlap"),
-                           labels=c("climate  \nsimilarity  ",
-                                    "wind  \naccessibility  ",
-                                    "wind-analog  \noverlap  "))) %>%
+                           labels=c("Climate  \navailability  ",
+                                    "Wind  \naccessibility  ",
+                                    "Wind-analog  \noverlap  "))) %>%
   group_by(property) %>%
   mutate(value = ifelse(grepl("overlap", property), truncate(value), value)) %>%
   ungroup() %>%
@@ -511,11 +507,12 @@ scat <- sd %>% #sample_n(5000) %>%
   labs(x="outbound",
        y="inbound")
 
-p <- arrangeGrob(legend, scat, ncol=1, heights=c(1, 3))
+p <- arrangeGrob(lgnd, scat, ncol=1, heights=c(1, 3))
 p <- arrangeGrob(map, p, ncol=2, widths=c(4, 1))
 
 source("E:/edges/range-edges/code/utilities.r")
-ggs("figures/windsheds/global/windfill_clim.png", p, width=10, height=8, units="in",
+ggs("figures/windsheds/global/windfill_clim.png", 
+    p, width=10, height=8, units="in",
     add = grid.text(letters[1:6], 
                     x=c(.05, .05, .82, .82, .82, .82), 
                     y=c(.62, .115, .78, .55, .30, .05),
