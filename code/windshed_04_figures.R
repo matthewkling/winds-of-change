@@ -610,9 +610,8 @@ for(drn in c("inbound", "outbound")){
     scale_y_log10() +
     theme_minimal() +
     theme(text=element_text(size = 15)) +
-    labs(x = paste0("analog climate availability (", drn, " direction)\n"),
-         y = paste0("\n", updown, 
-                    "wind-accessibility of analog area\n\n<--- hindrance --------------------------- facilitation --->"))
+    labs(x = paste0("Analog climate availability\n"),
+         y = paste0("\nWind facilitation (1/h)"))
   
   library(png)
   img <- readPNG(paste0("figures/windsheds/rgl/climwind_", drn, ".png"))
