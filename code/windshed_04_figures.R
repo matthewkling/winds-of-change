@@ -69,8 +69,12 @@ d <- spread(d, property, value) %>%
   gather(property, value, clim, wind, overlap, windfill)
 
 d <- mutate(d, property = factor(property, levels=c("clim", "wind", "overlap", "windfill"), 
-                                 labels=c("climate\nsimilarity", "wind\naccessibility", "climate-wind\noverlap", "wind\nfacilitation")),
-            attr = factor(attr, levels=c("latitude", "elevation", "continentality")))
+                                 labels=c("Climate\navailability", 
+                                          "Wind\naccessibility", 
+                                          "Wind-climate\noverlap", 
+                                          "Wind\nfacilitation")),
+            attr = factor(attr, levels=c("latitude", "elevation", "continentality"), 
+                          labels=c("Latitude (deg)", "Elevation (m)", "Continentality (km)")))
 
 p <- ggplot(d %>% sample_n(200000) %>% filter(property != "windfill"), 
             aes(coord, value)) +
@@ -155,33 +159,69 @@ if(F){
 }
 
 for(prp in unique(d$property)){
+  pd <- d %>% sample_n(200000) %>% filter(property == prp) %>% 
+    mutate(coord = case_when(attr == "Elevation (m)" ~ log10(coord),
+                             attr == "Continentality (km)" ~ log10(coord),
+                             TRUE ~ coord),
+           coord = truncate(coord, .001, "low"),
+           value = truncate(value, .005, "high"))
   
-  p <- ggplot(d %>% sample_n(200000) %>% filter(property == prp) %>% 
-                mutate(coord = case_when(attr == "elevation" ~ log10(coord),
-                                         attr == "continentality" ~ log10(coord),
-                                         TRUE ~ coord),
-                       coord = truncate(coord, .001, "low"),
-                       value = truncate(value, .005, "high")), 
-              aes(coord, value)) +
-    facet_grid(. ~ attr, scales="free") +
-    geom_point(size=.2, color="white") +
+  title <- case_when(prp == "Climate\navailability" ~ "Climate analog availability",
+                     prp == "Wind\naccessibility" ~ "Wind accessibility (1/h)",   
+                     prp == "Wind-climate\noverlap" ~ "Wind-climate overlap (1/h)",
+                     prp == "Wind\nfacilitation" ~ "Wind facilitation (1/h)")
+  
+  style <- theme(axis.title=element_text(color="black", size=25),
+                 legend.position="bottom",
+                 strip.text=element_text(size=25, color="black"),
+                 legend.text=element_text(size=25, color="black"),
+                 axis.text=element_text(size=15, color="black"),
+                 legend.title=element_blank())
+  
+  plat <- pd %>% filter(attr == "Latitude (deg)") %>%
+    ggplot(aes(coord, value)) +
+    geom_point(size=.2, color="black") +
     geom_smooth(se=F, aes(color=paste(direction, "     ")), size=2) +
     scale_color_manual(values=c("red", "dodgerblue")) +
-    theme_minimal() +
-    labs(title = "Geographic relationships with forward windshed summary statistics",
-         y = sub("\\\n", " ", prp)) +
-    theme(axis.title.x=element_blank(),
-          axis.title.y=element_text(color="white", size=25),
-          legend.position="bottom",
-          strip.text=element_text(size=25, color="white"),
-          legend.text=element_text(size=25, color="white"),
-          axis.text=element_text(size=15, color="white"),
-          legend.title=element_blank(),
-          plot.background = element_rect(fill="black"))
-  ggsave(paste0("figures/windsheds/global/scatter_windshed_geography_bw_",
-                sub("\\\n", "", prp), ".png"),
-         width=12, height=5, units="in")
+    theme_minimal() + style +
+    labs(y = title,
+         x = "Latitude (deg)") +
+    ylim(0, NA)
+    
   
+  pelev <- pd %>% filter(attr == "Elevation (m)") %>%
+    ggplot(aes(coord, value)) +
+    geom_point(size=.2, color="black") +
+    geom_smooth(se=F, aes(color=paste(direction, "     ")), size=2) +
+    scale_color_manual(values=c("red", "dodgerblue")) +
+    theme_minimal() + style +
+    labs(y = gsub("\\\n", " ", prp),
+         x = "Elevation (m)") +
+    scale_x_continuous(labels = function(x) ifelse(x < 4, 10^x, x)) +
+    theme(axis.title.y = element_blank(),
+          axis.text.y = element_blank()) +
+    ylim(0, NA)
+  
+  pcont <- pd %>% filter(attr == "Continentality (km)") %>%
+    ggplot(aes(coord, value)) +
+    geom_point(size=.2, color="black") +
+    geom_smooth(se=F, aes(color=paste(direction, "     ")), size=2) +
+    scale_color_manual(values=c("red", "dodgerblue")) +
+    theme_minimal() + style +
+    labs(y = gsub("\\\n", " ", prp),
+         x = "Continentality (km)") +
+    scale_x_continuous(labels = function(x) ifelse(x < 4, 10^x, x)) +
+    theme(axis.title.y = element_blank(),
+          axis.text.y = element_blank()) +
+    ylim(0, NA)
+  
+  
+  p <- (plat + pelev + pcont) / guide_area() + 
+    plot_layout(guides = "collect", heights=c(1, .1))
+  
+  ggsave(paste0("figures/windsheds/global/scatter_windshed_geography_bw_",
+                gsub("\\\n", "", prp), ".png"), p,
+         bg="black", width=15, height=6, units="in")
 }
 
 
@@ -354,23 +394,27 @@ for(var in unique(d$property)){
                   overlap="identity", windfill="identity")
   
   label <- switch(var, 
-                  clim="climate\nsimilarity", wind="wind\naccessibility", 
-                  overlap="climate-wind\noverlap", 
-                  windfill="wind\nfacilitation")
+                  clim="Climate\nanalog\navailability", 
+                  wind="Wind\naccessibility\n(1/h)", 
+                  overlap="Climate-wind\noverlap\n(1/h)", 
+                  windfill="Wind\nfacilitation\n(1/h)")
   
   map0 <- ggplot(v, aes(x, y, fill=value)) +
     facet_grid(direction ~ .) +
     geom_raster() +
-    #scale_fill_viridis_c(trans=trans) +
     scale_fill_gradientn(colors=c("darkblue", "red", "yellow"),
                          trans=trans) +
-    ylim(-90, 90) +
-    theme_void() +
-    theme(text=element_text(size=20, color="white"),
+    theme_minimal() +
+    theme(text=element_text(size=20, color="black"),
           strip.text=element_text(size=20, angle=-90),
-          plot.background = element_rect(fill="black", color="black"),
-          legend.position=c(.1, .73)) +
-    guides(fill=guide_colorbar(barheight=15)) +
+          axis.text = element_blank(),
+          axis.title = element_blank(),
+          axis.ticks = element_blank(),
+          #plot.background = element_rect(fill="black", color="black"),
+          legend.position=c(.07, .73)) +
+    guides(fill=guide_colorbar(barheight=12)) +
+    scale_x_continuous(expan=c(0,0)) +
+    scale_y_continuous(expan=c(0,0), limits=c(-90, 90)) +
     labs(fill = label)
   ggsave(paste0("figures/windsheds/global/", var, ".png"), 
          width=12, height=12, units="in")
@@ -426,19 +470,24 @@ for(var in unique(d$property)){
   dev.off()
   
   # assemble multi-panel figure for SI
+  lbl <- switch(var, 
+                clim="Climateavailability", 
+                wind="Windaccessibility", 
+                overlap="Wind-climateoverlap", 
+                windfill="Windfacilitation")
   library(png)
   img <- paste0("figures/windsheds/global/scatter_windshed_geography_bw_",
-                sub("\\\n", "", label), ".png") %>%
+                lbl, ".png") %>%
     readPNG() %>%
     rasterGrob(interpolate=TRUE)
   p <- arrangeGrob(map0, img, nrow=2, heights=c(12, 5))
   
   ggs(paste0("figures/manuscript/SI_fig_", var, ".png"),
       p, width=12, height=17, units="in",
-      add = grid.text(letters[1:4], 
-                      x=c(.03, .08, .40, .72), 
-                      y=c(.97, .25, .25, .25),
-                      gp=gpar(fontsize=30, fontface="bold", col="white")))
+      add = grid.text(letters[1:5], 
+                      x=c(.03, .03, .09, .41, .73), 
+                      y=c(.97, .63, .26, .26, .26),
+                      gp=gpar(fontsize=30, fontface="bold", col="black")))
 }
 
 
