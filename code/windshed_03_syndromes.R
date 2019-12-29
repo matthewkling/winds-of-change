@@ -26,12 +26,6 @@ select <- dplyr::select
 stop("get functions and input datasets from windshed_02_analysis script")
 
 
-# f0 <- read_csv("data/windshed/p1_30y_250km_inv.csv") %>%
-#       select(-runtime) %>%
-#       gather(var, value, -x, -y) %>%
-#       separate(var, c("property", "direction", "moment", "stat"), sep="_")
-
-
 
 woc <- function(x, y, windrose, climate, 
                 radius = 250, time_conv=identity,
@@ -335,10 +329,9 @@ for(drn in c("inbound", "outbound")){
    }
    d$color2 <- whiten(d$color, (1-d$climrnk)^1.5)
    
+   ds <- d %>% sample_n(nrow(.))
    dummy <- data.frame(clim=max(ds$clim[ds$syndrome=="climate-limited"]),
                        windfill=min(ds$windfill[ds$syndrome=="wind-facilitated"]))
-   
-   ds <- d %>% sample_n(nrow(.))
    scatter <- ds %>% 
       ggplot(aes(clim, windfill)) + 
       
@@ -362,7 +355,7 @@ for(drn in c("inbound", "outbound")){
             legend.text=element_text(size=11),
             panel.background = element_rect(fill="gray75"),
             panel.grid=element_blank()) +
-      labs(x="Climatic similarity",
+      labs(x="Analog climate availability",
            y="Wind facilitation (1/h)",
            color=NULL)
    
@@ -438,3 +431,4 @@ for(drn in c("inbound", "outbound")){
           width=8, height=4, units="in")
    
 }
+
