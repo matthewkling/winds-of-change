@@ -269,6 +269,7 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
                 x = (max(comp, na.rm=T)+min(comp, na.rm=T))/2)
   }
   
+  
   p <- ggplot(d, aes(comp, main, color = tag==maintag)) +
     facet_grid(. ~ tag, scales="free") +
     geom_point(alpha = 0.2, shape = 16, size = 0.5) +
@@ -276,9 +277,10 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
               color="red", hjust=.5) +
     scale_color_manual(values=c("black", "red")) +
     theme_minimal() +
-    theme(legend.position = "none") +
-    labs(x="Facilitation ratio",
-         y=paste0("Facilitation ratio for\n", maintag))
+    theme(legend.position = "none",
+          axis.text.x=element_text(angle=45, hjust=1)) +
+    labs(x="Wind facilitation (1/h)",
+         y=paste0("Wind facilitation\nfor ", maintag, " (1/h)"))
   
   if(log) p <- p + scale_x_log10() + scale_y_log10()
   ggsave(outfile, p, width=8, height=height, units="in")
@@ -331,13 +333,14 @@ ws <- list(data=c("data/windrose/windrose_p0_wnd10m.tif",
   pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
 sensitivity_plot(ws, maintag="p1", comptag="p2", 
                  title="Sensitivity to conductance function",
-                 outfile="figures/windsheds/global/sensitivity_scatters_p.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_p.png",
                  height=3)
 sensitivity_plot(ws, maintag="p1", comptag="p2", 
                  title="Sensitivity to conductance function", log=T,
-                 outfile="figures/windsheds/global/sensitivity_scatters_p_log.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_p_log.png",
                  height=3)
-
+file.copy("figures/windsheds/sensitivity/sensitivity_scatters_p_log.png",
+          "figures/manuscript/SI_fig_sens_p.png", overwrite=T)
 
 
 # seasonality
@@ -350,17 +353,18 @@ ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif",
   pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
 sensitivity_plot(ws, maintag="annual", comptag="DJF",
                  title="Sensitivity to season of year",
-                 outfile="figures/windsheds/global/sensitivity_scatters_seasons.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_seasons.png",
                  height=2)
 sensitivity_plot(ws, maintag="JJA", comptag="DJF",
                  title="Sensitivity to season of year",
-                 outfile="figures/windsheds/global/sensitivity_scatters_seasons_v2.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_seasons_v2.png",
                  height=2)
 sensitivity_plot(ws, maintag="annual", comptag="DJF",
                  title="Sensitivity to season of year", log=T,
-                 outfile="figures/windsheds/global/sensitivity_scatters_seasons_log.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_seasons_log.png",
                  height=2)
-
+file.copy("figures/windsheds/sensitivity/sensitivity_scatters_seasons_log.png",
+          "figures/manuscript/SI_fig_sens_seasons.png", overwrite=T)
 
 # atmospheric layers
 ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif",
@@ -370,12 +374,13 @@ ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif",
            tag=c("z = 10m", "z = 1000hpa", "z = 850hpa", "z = 700hpa")) %>%
   pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
 sensitivity_plot(ws, maintag="z = 10m", comptag="z = 850hpa", title="Sensitivity to altitude", 
-                 outfile="figures/windsheds/global/sensitivity_scatters_altitude.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_altitude.png",
                  height=2.5)
 sensitivity_plot(ws, maintag="z = 10m", comptag="z = 850hpa", title="Sensitivity to altitude", log=T, 
-                 outfile="figures/windsheds/global/sensitivity_scatters_altitude_log.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_altitude_log.png",
                  height=2.5)
-
+file.copy("figures/windsheds/sensitivity/sensitivity_scatters_altitude_log.png",
+          "figures/manuscript/SI_fig_sens_altitude.png", overwrite=T)
 
 
 # accessibility functions
@@ -389,11 +394,11 @@ fx <- list(access=list(list(name = "inv", fx = function(x){1/x}, form = "1/x"),
 ws <- pmap_df(fx, windscapes, output="df", subsample=list(n=1000, seed=12345))
 sensitivity_plot(ws, maintag="inv", comptag="exp95",
                  title="Sensitivity to accessibility function",
-                 outfile="figures/windsheds/global/sensitivity_scatters_access.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_access.png",
                  height=2)
 sensitivity_plot(ws %>% na.omit(), maintag="inv", comptag="exp95",
                  title="Sensitivity to accessibility function", log=T,
-                 outfile="figures/windsheds/global/sensitivity_scatters_access_log.png",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_access_log.png",
                  height=2)
 curves <- map_df(fx$access, 
                  function(fun) data.frame(name=fun$name, fun=fun$form, 
@@ -402,14 +407,26 @@ curves <- map_df(fx$access,
   geom_line() +
   theme_minimal() +
   ylim(0, 1) +
-  theme(legend.position=c(.7, .7),
+  theme(#legend.position=c(.7, .7),
         legend.title = element_blank()) +
   labs(x="wind hours",
        y="wind accessibility") +
   coord_fixed(ratio=1000)
-ggsave("figures/windsheds/global/sensitivity_scatters_access_curves.png", curves,
+ggsave("figures/windsheds/sensitivity/sensitivity_scatters_access_curves.png", curves,
        width=4, height=4, units="in")
 
+img <- readPNG("figures/windsheds/sensitivity/sensitivity_scatters_access_log.png") %>%
+  rasterGrob(interpolate=TRUE)
+
+p <- (curves | plot_spacer()) / img
+
+source("E:/edges/range-edges/code/utilities.r")
+ggs(paste0("figures/manuscript/SI_fig_sens_access.png"),
+    p, width=8, height=5, units="in",
+    add = grid.text(letters[1:2], 
+                    x=c(.02, .02), 
+                    y=c(.97, .43),
+                    gp=gpar(fontsize=20, fontface="bold", col="black")))
 
 
 # analog function
@@ -420,7 +437,7 @@ ws <- expand.grid(method=c("gaussian", "triangular", "threshold"),
           output="df", subsample=list(n=1000, seed=12345))
 maintag="gaussian_2"
 title="Sensitivity to climate analog specificity"
-outfile="figures/windsheds/global/sensitivity_scatters_climate.png"
+outfile="figures/windsheds/sensitivity/sensitivity_scatters_climate.png"
 height=4
 d <- ws %>%
   mutate(var = overlap_fwd_windshed_size / clim_fwd_windshed_size) %>%
@@ -446,9 +463,10 @@ p <- ggplot(d, aes(comp, main, color = tag==maintag)) +
   scale_color_manual(values=c("black", "red")) +
   scale_x_log10() + scale_y_log10() +
   theme_minimal() +
-  theme(legend.position = "none") +
-  labs(x="Facilitation ratio",
-       y=paste0("Facilitation ratio for Gaussian with breadth = 2"))
+  theme(legend.position = "none",
+        axis.text.x=element_text(angle=45, hjust=1)) +
+  labs(x="Wind facilitation (1/h)",
+       y=paste0("Wind facilitation for Gaussian with breadth = 2 (1/h)"))
 ggsave(outfile, p, width=8, height=height, units="in")
 
 afun <- function(method = "gaussian", sigma = 1){
@@ -472,8 +490,15 @@ af <- d %>%
   scale_color_manual(values=c("black", "red")) +
   theme_minimal() +
   theme(legend.position="none") +
-  labs(x="Climatic difference (degrees C)",
+  labs(x="Climatic difference (°C)",
        y="Similarity")
 ggsave(outfile %>% sub("\\.png", "_curves.png", .), 
        af, width=8, height=height, units="in")
 
+pw <- af / p
+ggs(paste0("figures/manuscript/SI_fig_sens_climate.png"),
+    pw, width=8, height=10, units="in",
+    add = grid.text(letters[1:2], 
+                    x=c(.02, .02), 
+                    y=c(.97, .47),
+                    gp=gpar(fontsize=20, fontface="bold", col="black")))
