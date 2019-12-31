@@ -656,9 +656,11 @@ for(drn in c("inbound", "outbound")){
     geom_point(color=dd$color2, size=.3) +
     geom_vline(xintercept=max(dd$clim[dd$syndrome=="FALSE FALSE"]), linetype=2, color="white") +
     geom_hline(yintercept=max(dd$windfill[dd$syndrome=="FALSE FALSE"]), linetype=2, color="white") +
-    scale_y_log10() +
+    scale_x_continuous(expand=c(0,0), limits=c(0, NA)) +
+    scale_y_continuous(expand=c(0,0), trans="log10") +
     theme_minimal() +
-    theme(text=element_text(size = 15),
+    theme(text=element_text(size = 17),
+          axis.text.y=element_text(angle=90),
           legend.position="none") +
     labs(x = paste0("Analog climate availability\n"),
          y = paste0("\nWind facilitation (1/h)"))
@@ -680,19 +682,17 @@ for(drn in c("inbound", "outbound")){
     geom_histogram(stat="identity", position="fill", width=1) +
     coord_flip() +
     scale_fill_manual(values=palette) +
-    scale_y_continuous(#expand=c(0,0), 
+    scale_y_continuous(expand=c(0,0), 
                        breaks=c(0, .5, 1)) +
     scale_x_continuous(expand=c(0,0), limits=c(-90, 90), 
-                       breaks=seq(-90, 90, 30), position="top") +
+                       breaks=seq(-90, 90, 30)) +
     theme(legend.position="none",
+          text=element_text(size = 17),
           panel.grid=element_blank(),
           panel.background = element_rect(fill="white")) +
     labs(y = "Proportion of area", x = "°N")
   
   library(patchwork)
-  maps <- map + hist + plot_layout(widths=c(7, 1))
-  ggsave(paste0("figures/windsheds/global/windfill_clim_", drn, "_patch.png"), 
-         maps, width=8, height=4, units="in", dpi=1000)
   
   
   library(png)
@@ -701,22 +701,20 @@ for(drn in c("inbound", "outbound")){
   img <- aperm(img, c(2, 3, 1))
   img <- rasterGrob(img, interpolate=TRUE)
   
-  img2 <- readPNG(paste0("figures/windsheds/global/windfill_clim_", drn, "_patch.png")) %>%
-    rasterGrob(interpolate=TRUE)
-  
-  p <- arrangeGrob(legend, img, nrow=1)
-  p <- arrangeGrob(p, img2, nrow=2, heights=c(1, 1))
+  p <- (legend + img) / 
+    (hist + map +  plot_layout(widths=c(1, 7)))
+    
   
   source("E:/edges/range-edges/code/utilities.r")
   ggs(paste0("figures/windsheds/global/windfill_clim_", drn, "_array.png"),
       p, width=12, height=12, units="in", dpi=1000,
       add = list(grid.text(letters[1:3], 
-                           x=c(.03, .03, .8), 
-                           y=c(.97, .47, .47),
+                           x=c(.03, .03, .23), 
+                           y=c(.95, .47, .47),
                            gp=gpar(fontsize=30, fontface="bold", col="black")),
                  grid.text(letters[4], 
-                           x=c(.53), 
-                           y=c(.97),
+                           x=c(.56), 
+                           y=c(.95),
                            gp=gpar(fontsize=30, fontface="bold", col="white"))))
   
   if(drn=="outbound") file.copy(paste0("figures/windsheds/global/windfill_clim_", drn, "_array.png"),
