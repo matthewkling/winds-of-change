@@ -380,7 +380,10 @@ for(drn in c("inbound", "outbound")){
    
    p <- scatter + archetypes + hist + map +  
       plot_layout(nrow=2, heights=c(1.5, 3), widths=c(1, 4))
-   
+   if(drn=="inbound"){
+      hist1 <- hist
+      map1 <- map
+   }
    
    source("E:/edges/range-edges/code/utilities.r")
    
@@ -393,7 +396,20 @@ for(drn in c("inbound", "outbound")){
                        y=c(.97, .97, .58, .58),
                        gp=gpar(fontsize=20, fontface="bold", col="black")))
    
-   file.copy(outfile, paste0("figures/manuscript/", basename(outfile)), overwrite = T)
+   #file.copy(outfile, paste0("figures/manuscript/", basename(outfile)), overwrite = T)
+   
+   if(drn=="outbound"){
+      stop()
+      p <- scatter + archetypes + hist1 + map1 + hist + map +
+         plot_layout(nrow=3, heights=c(1.5, 3, 3), widths=c(1, 4))
+      ggs("figures/manuscript/SI_fig_syndromes.png", p,
+          width=10, height=11.5, units="in",
+          add = grid.text(letters[1:6], 
+                          x=c(.02, .275, .02, .275, .02, .275), 
+                          y=c(.97, .97, .74, .74, .36, .36),
+                          gp=gpar(fontsize=20, fontface="bold", col="black")))
+      
+   }
    
    
    #########################################
