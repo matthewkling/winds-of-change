@@ -178,6 +178,8 @@ for(drn in c("inbound", "outbound")){
       mutate(andiv = (1 - isotropy) * divergence) %>%
       
       left_join(areas) %>%
+      arrange(wind) %>%
+      mutate(windrnk = cumsum(area) / sum(area)) %>%
       arrange(clim) %>%
       mutate(climrnk = cumsum(area) / sum(area)) %>%
       arrange(windfill) %>%
@@ -309,7 +311,7 @@ for(drn in c("inbound", "outbound")){
       geom_histogram(stat="identity", position="fill", width=1) +
       coord_flip() +
       scale_fill_manual(values=palette) +
-      scale_y_continuous(expand=c(0,0)) +
+      #scale_y_continuous(expand=c(0,0)) +
       scale_x_continuous(expand=c(0,0), limits=c(-90, 90), 
                          breaks=seq(-90, 90, 30)) +
       theme(legend.position="none",
@@ -317,7 +319,7 @@ for(drn in c("inbound", "outbound")){
             panel.background = element_rect(fill="gray75")) +
       labs(y = "Proportion of area", x = "°N")
    
-   d <- d %>% mutate(color = colors2d(cbind(.$isotropyrnk, .$windfillrnk),
+   d <- d %>% mutate(color = colors2d(cbind(.$andivrnk, .$windfillrnk),
                                       palette[c(4,3,2,4)]))
    
    whiten <- function(hex, scalar){
@@ -336,10 +338,11 @@ for(drn in c("inbound", "outbound")){
       ggplot(aes(clim, windfill)) + 
       
       # a horrid hack to place the legend for the archetype panel
-      geom_point(data=dummy, size=6, shape=15, aes(color="climate similarity")) +
-      geom_point(data=dummy, size=6, shape=15, aes(color="wind accessibility")) +
-      geom_point(data=dummy, size=6, shape=15, aes(color="wind-climate overlap")) +
-      scale_color_manual(values=c("yellow", "green", "cyan")) +
+      geom_point(data=dummy, size=6, shape=15, aes(fill="climate similarity")) +
+      geom_point(data=dummy, size=6, shape=15, aes(fill="wind accessibility")) +
+      geom_point(data=dummy, size=6, shape=15, aes(fill="wind-climate overlap")) +
+      scale_fill_manual(values=c("yellow", "green", "cyan"), 
+                        guide=guide_legend(override.aes=list(shape=22, size=8))) +
       
       geom_point(color=ds$color2, size=.5) +
       annotate(geom="segment", linetype=2, 
@@ -353,23 +356,23 @@ for(drn in c("inbound", "outbound")){
                yend=min(ds$windfill[ds$syndrome=="wind-facilitated"])) +
       theme(legend.position=c(3, -.1), legend.direction="horizontal",
             legend.text=element_text(size=11),
+            legend.key = element_rect(color="white", fill="white"),
             panel.background = element_rect(fill="gray75"),
             panel.grid=element_blank()) +
       labs(x="Analog climate availability",
            y="Wind facilitation (1/h)",
            color=NULL)
    
-   map <- ggplot(d, aes(x, y, #alpha=climrnk^.75, 
-                        fill=syndrome)) +
-      geom_raster() +
-      #geom_raster(fill=palette[1], alpha=1) + # color for climate-limited
+   map <- ggplot(d, aes(x, y, fill=syndrome)) +
+      geom_point(data=d %>% filter(abs(x)<80, abs(y)<80) %>% sample_n(100), color="gray75", size=.01) +
       geom_raster(fill=d$color2) +
-      scale_fill_manual(values=palette) +
+      scale_fill_manual(values=palette, 
+                        guide=guide_legend(override.aes=list(shape=22, size=8))) +
       scale_alpha_continuous(range=0:1, guide="none") +
       scale_x_continuous(expand=c(0,0)) +
       scale_y_continuous(expand=c(0,0), limits=c(-90, 90)) +
       theme_void() +
-      theme(legend.position=c(.5, -.065), legend.direction="horizontal", #c(.12, .35),
+      theme(legend.position=c(.5, -.065), legend.direction="horizontal",
             legend.text = element_text(color="black", size=11),
             panel.background = element_rect(fill="gray75")) +
       labs(fill = NULL)
@@ -429,6 +432,83 @@ for(drn in c("inbound", "outbound")){
       labs(fill = paste0(drn, "\nsyndrome"))
    ggsave(paste0("figures/windsheds/syndromes/syndrome_", drn, "2.png"), 
           width=8, height=4, units="in")
+   
+   
+   #####
+   
+   
+   
+   ds <- d %>% arrange(clim)
+   scatter_alt <- ds %>% 
+      ggplot(aes(andiv, windfill)) + 
+      
+      # a horrid hack to place the legend for the archetype panel
+      # geom_point(data=dummy, size=6, shape=15, aes(fill="climate similarity")) +
+      # geom_point(data=dummy, size=6, shape=15, aes(fill="wind accessibility")) +
+      # geom_point(data=dummy, size=6, shape=15, aes(fill="wind-climate overlap")) +
+      scale_fill_manual(values=c("yellow", "green", "cyan"), 
+                        guide=guide_legend(override.aes=list(shape=22, size=8))) +
+      
+      geom_point(color=ds$color2, size=.5) +
+      # annotate(geom="segment", linetype=2, 
+      #          x=max(ds$clim[ds$syndrome=="climate-limited"]), 
+      #          xend=max(ds$clim[ds$syndrome=="climate-limited"]), 
+      #          y=min(ds$windfill), yend=max(ds$windfill)) +
+      # annotate(geom="segment", linetype=2, 
+      #          x=max(ds$clim[ds$syndrome=="climate-limited"]), 
+      #          xend=max(ds$clim), 
+      #          y=min(ds$windfill[ds$syndrome=="wind-facilitated"]), 
+      #          yend=min(ds$windfill[ds$syndrome=="wind-facilitated"])) +
+      scale_x_sqrt() +
+      theme(legend.position=c(3, -.1), legend.direction="horizontal",
+            legend.text=element_text(size=11),
+            legend.key = element_rect(color="white", fill="white"),
+            panel.background = element_rect(fill="gray75"),
+            panel.grid=element_blank()) +
+      labs(x="Directional divergence",
+           y="Wind facilitation (1/h)",
+           color=NULL)
+   
+   #dr <- sample_n(d, 5000)
+   #plot3d(dr$clim, dr$andiv, dr$overlap, 
+   #       col=dr$color2, size=10,
+   #       xlab="clim", ylab="divergence", zlab="overlap")
+   
+   
+   
+   d <- d %>% mutate(color = colors2d(cbind(.$climrnk, .$windfillrnk),
+                                      c("green", "yellow", "red", "blue")))
+   dr <- sample_n(d, 5000)
+   plot3d(dr$clim, dr$andiv, dr$overlap, 
+          col=dr$color, size=10,
+          xlab="clim", ylab="divergence", zlab="overlap")
+   
+   
+   d <- d %>% mutate(color = colors3d(cbind(.$climrnk, .$windfillrnk, .$andivrnk)))
+   dr <- sample_n(d, 5000)
+   plot3d(dr$clim, dr$andiv, dr$overlap, 
+          col=dr$color, size=10,
+          xlab="clim", ylab="divergence", zlab="overlap")
+   
+   d <- d %>% mutate(color = colors3d(cbind(.$climrnk, .$windrnk, .$overlaprnk)))
+   dr <- sample_n(d, 5000)
+   plot3d(dr$clim, dr$wind, dr$overlap, 
+          col=dr$color, size=10,
+          xlab="clim", ylab="divergence", zlab="overlap")
+   
+   
+   
+   
+   
+   d <- d %>% mutate(color = colors2d(cbind(.$andivrnk, .$windfillrnk),
+                                        c("darkblue", "red", "gold", "forestgreen")))
+   d$color2 <- whiten(d$color, (1-d$climrnk)^4)
+   
+   dr <- sample_n(d, 1000)
+   plot3d(dr$clim, dr$andiv, dr$windfill, 
+          col=dr$color2, size=10,
+          xlab="clim", ylab="divergence", zlab="overlap")
+   
    
 }
 
