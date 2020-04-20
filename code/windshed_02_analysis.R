@@ -12,21 +12,35 @@ select <- dplyr::select
 
 
 # calculate the spatial distribution of climate analogs for a given location
-analogs <- function(climate, # raster stack of first, second timesteps
+analogs <- function(climate, # raster stack of first, second timesteps, for 1+ climate variables
                     coords, # lon-lat vector
                     reverse = FALSE, # should reverse analogs be calculated, instead of forward
                     method = "gaussian", # c("gaussian", "triangular", "threshold)
-                    sigma = 1 # width of similarity kernel, in deg C; details vary by method
+                    sigma = 1 # vector of length 1+: width of similarity kernel; details vary by method
                     # gaussian = standard deviation, triangular = delta of half suitability,
                     # threshold = cutoff
 ){
-  if(reverse) climate <- climate[[2:1]]
+  
+  if(nlayers(climate) != length(sigma)*2) stop("must provide 2 raster layers and one sigma per climate variable")
   coords <- matrix(coords, ncol=2)
-  target <- raster::extract(climate[[1]], coords)
-  if(method == "gaussian") kernel <- function(x) exp(-.5*(x/sigma)^2)
-  if(method == "triangular") kernel <- function(x) pmax(0, 1 - (abs(x)/sigma/2))
-  if(method == "threshold") kernel <- function(x) as.integer(abs(x) <= sigma)
-  calc(climate[[2]] - target, kernel)
+  #a <- climate[[1:length(sigma)]]
+  a <- list()
+  for(i in 1:length(sigma)){
+    sig <- sigma[i]
+    clim <- climate[[(i*2-1):(i*2)]]
+    if(reverse) clim <- clim[[2:1]]
+    target <- raster::extract(clim[[1]], coords)
+    if(method == "gaussian") kernel <- function(x) exp(-.5*(x/sig)^2)
+    if(method == "triangular") kernel <- function(x) pmax(0, 1 - (abs(x)/sig/2))
+    if(method == "threshold") kernel <- function(x) as.integer(abs(x) <= sig)
+    
+    ai <- calc(clim[[2]] - target, kernel)
+    a <- c(a, ai)
+  }
+  a <- stack(a)
+  if(nlayers(a) > 1) a <- prod(a)
+  if(class(a) == "RasterStack") a <- a[[1]]
+  a
 }
 
 
@@ -67,7 +81,7 @@ woc <- function(x, y, windrose, climate,
                 radius = 1000, time_conv=identity,
                 method = "gaussian", sigma = 2,
                 output = "summary"){
-  #browser()
+  
   start <- Sys.time()
   coords <- c(x, y)
   origin <- matrix(coords, ncol=2)
@@ -148,10 +162,11 @@ woc <- function(x, y, windrose, climate,
 
 
 windscapes <- function(data="data/windrose/windrose_p1_wnd10m.tif", 
+                       climdata="data/geographic/processed/temperature.tif", # vector of 1+ climate datasets
                        tag="p1_wnd10m",
                        access=list(name = "inv", fx = function(x){1/x}, form = "1/x"),
                        method="gaussian", # c("gaussian", "triangular", "threshold")
-                       sigma=2, # climate sigma
+                       sigma=2, # vector of 1+ climate sigmas
                        radius=250, # km
                        water=.1, # accessibility multiplier
                        subsample=NULL, # list(n=1000, seed=12345)
@@ -160,6 +175,7 @@ windscapes <- function(data="data/windrose/windrose_p1_wnd10m.tif",
                        ncores = 7){
   
   # admin
+  message(tag)
   if(output == "csv"){
     outfile <- paste0("data/windshed/", tag, "_", radius, "km_", access$name, ".csv")
     if(!overwrite & file.exists(outfile)){
@@ -169,7 +185,7 @@ windscapes <- function(data="data/windrose/windrose_p1_wnd10m.tif",
   }
   
   # load current/future climate data
-  climate <- stack("data/geographic/processed/temperature.tif") %>% unwrap(180)
+  climate <- stack(climdata) %>% unwrap(180)
   
   # load land data
   land <- raster("f:/cfsr/land.tif") %>% 
@@ -189,14 +205,14 @@ windscapes <- function(data="data/windrose/windrose_p1_wnd10m.tif",
     rasterToPoints() %>%
     as.data.frame() %>%
     filter(abs(x) <= 180)
-  if(!is.null(sample)){
+  if(!is.null(subsample)){
     set.seed(subsample$seed)
     pixels <- sample_n(pixels, subsample$n)
   } 
   pixels <- pixels %>% 
     mutate(batch = sample(1:ncores, nrow(.), replace=T)) %>%
     split(.$batch)
-  
+  #browser()
   # models for each location
   require(doParallel)
   cl <- makeCluster(ncores)
@@ -234,23 +250,24 @@ windscapes()
 ############ sensitivity analyses ##############
 
 sensitivity_plot <- function(x, maintag, title, outfile, height, 
-                             log=F, method="spearman",
+                             tlabels = NULL, tlevels = NULL,
+                             log=F, method="spearman", frows = 1,
                              comptag=NULL){
   
-  maintag <- sub(" = ", "_", maintag)
-  x$tag <- sub(" = ", "_", x$tag)
   xx <- x
   
   d <- x %>%
     mutate(var = overlap_fwd_windshed_size / clim_fwd_windshed_size) %>%
     select(x, y, tag, var) %>%
     spread(tag, var) %>%
-    mutate_(main =  maintag) %>%
+    mutate_(main = maintag) %>%
     gather(tag, comp, -main, -x, -y) %>%
     mutate(tag=factor(tag, levels=unique(xx$tag))) %>%
     mutate(weight = cos(y/180*pi))
   
   wcor <- function(x, y, weights) cov.wt(cbind(x, y), wt = weights, cor = TRUE)$cor[1,2]
+  
+  if(!is.null(tlabels)) d <- mutate(d, tag = factor(tag, levels = tlevels, labels = tlabels))
   
   if(log){
     cm <- d %>%
@@ -269,9 +286,11 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
                 x = (max(comp, na.rm=T)+min(comp, na.rm=T))/2)
   }
   
+  d <- d %>% mutate(mt = tag == tlabels[tlevels == maintag])
   
-  p <- ggplot(d, aes(comp, main, color = tag==maintag)) +
+  p <- ggplot(d, aes(comp, main, color = mt )) +
     facet_grid(. ~ tag, scales="free") +
+    #facet_wrap( ~ tag, nrow = frows) +
     geom_point(alpha = 0.2, shape = 16, size = 0.5) +
     geom_text(data=cm, aes(x=x, label=paste("r =", round(r, 2))), 
               color="red", hjust=.5) +
@@ -280,7 +299,7 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
     theme(legend.position = "none",
           axis.text.x=element_text(angle=45, hjust=1)) +
     labs(x="Wind facilitation (1/h)",
-         y=paste0("Wind facilitation\nfor ", maintag, " (1/h)"))
+         y=paste0("Wind facilitation\nfor ", tlabels[tlevels == maintag], " (1/h)"))
   
   if(log) p <- p + scale_x_log10() + scale_y_log10()
   ggsave(outfile, p, width=8, height=height, units="in")
@@ -302,6 +321,9 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
   
   if(log) d <- d %>% mutate(diff=log10(.[,maintag]) - log10(.[,comptag]))
   
+  maintag <- sub("-", "", maintag)
+  comptag <- sub("-", "", comptag)
+  names(d) <- sub("-", "", names(d))
   scatter <- ggplot(d, aes_string(maintag, comptag, color="diff")) + 
     geom_abline(slope=1, intercept=0) +
     geom_point()
@@ -322,6 +344,28 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
 }
 
 
+# climate variables
+temp <- "data/geographic/processed/temperature.tif"
+ppt <- "data/geographic/processed/precipitation.tif"
+bio5 <- "data/geographic/processed/bio5.tif"
+bio6 <- "data/geographic/processed/bio6.tif"
+# method for determining precip sigma equivalent to temp sigma of 2:
+# r <- stack(c(temp, ppt))
+# 2 / sd(r[[1]][], na.rm = T) * sd(r[[3]][], na.rm = T)
+ws <- list(climdata = list(temp, bio5, bio6, ppt, c(temp, ppt), c(bio5, bio6), c(bio5, bio6, ppt)),
+           sigma = list(2, 2, 2, .05, c(2, .05), c(2, 2), c(2, 2, .05)), # change for ppt
+           tag = c("tmean", "bio5", "bio6", "ppt", "tmean_ppt", "bio5_bio6", "bio5_bio6_ppt")) %>% 
+  pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
+sensitivity_plot(ws, maintag="tmean", comptag="tmean_ppt", frows = 2,
+                 title="Sensitivity to climate variables", log=F,
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_vars.png",
+                 height=5)
+sensitivity_plot(ws, maintag="tmean", comptag="tmean_ppt",  frows = 2,
+                 title="Sensitivity to climate variables", log=T,
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_vars_log.png",
+                 height=5)
+file.copy("figures/windsheds/sensitivity/sensitivity_scatters_vars_log.png",
+          "figures/manuscript/SI_fig_sens_vars.png", overwrite=T)
 
 
 # p exponents
@@ -329,13 +373,15 @@ ws <- list(data=c("data/windrose/windrose_p0_wnd10m.tif",
                   "data/windrose/windrose_p1_wnd10m.tif",
                   "data/windrose/windrose_p2_wnd10m.tif",
                   "data/windrose/windrose_p3_wnd10m.tif"),
-           tag=c("p0", "p1", "p2", "p3")) %>%
+           tag=c("velocity_ignored", "velocity", "velocity_squared", "velocity_cubed")) %>%
   pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
-sensitivity_plot(ws, maintag="p1", comptag="p2", 
+sensitivity_plot(ws, maintag="velocity", comptag="velocity_squared", 
+                 tlabels = c("velocity ignored", "velocity", "velocity squared", "velocity cubed"),
                  title="Sensitivity to conductance function",
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_p.png",
                  height=3)
-sensitivity_plot(ws, maintag="p1", comptag="p2", 
+sensitivity_plot(ws, maintag="velocity", comptag="velocity_squared",
+                 tlabels = c("velocity ignored", "velocity", "velocity squared", "velocity cubed"),
                  title="Sensitivity to conductance function", log=T,
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_p_log.png",
                  height=3)
@@ -349,17 +395,13 @@ ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif",
                   "data/windrose/windrose_p1_wnd10m_MAM.tif",
                   "data/windrose/windrose_p1_wnd10m_JJA.tif",
                   "data/windrose/windrose_p1_wnd10m_SON.tif"),
-           tag=c("annual", "DJF", "MAM", "JJA", "SON")) %>%
+           tag=c("annual", "December-February", "March-May", "June-August", "September-November")) %>%
   pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
-sensitivity_plot(ws, maintag="annual", comptag="DJF",
+sensitivity_plot(ws, maintag="annual", comptag="December-February",
                  title="Sensitivity to season of year",
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_seasons.png",
                  height=2)
-sensitivity_plot(ws, maintag="JJA", comptag="DJF",
-                 title="Sensitivity to season of year",
-                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_seasons_v2.png",
-                 height=2)
-sensitivity_plot(ws, maintag="annual", comptag="DJF",
+sensitivity_plot(ws, maintag="annual", comptag="December-February",
                  title="Sensitivity to season of year", log=T,
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_seasons_log.png",
                  height=2)
@@ -371,12 +413,16 @@ ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif",
                   "data/windrose/windrose_p1_wnd1000.tif",
                   "data/windrose/windrose_p1_wnd850.tif",
                   "data/windrose/windrose_p1_wnd700.tif"),
-           tag=c("z = 10m", "z = 1000hpa", "z = 850hpa", "z = 700hpa")) %>%
+           tag=c("z10m", "z1000hpa", "z850hpa", "z700hpa")) %>%
   pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
-sensitivity_plot(ws, maintag="z = 10m", comptag="z = 850hpa", title="Sensitivity to altitude", 
+sensitivity_plot(ws, maintag="z10m", comptag="z850hpa", title="Sensitivity to altitude", 
+                 tlevels = c("z10m", "z1000hpa", "z850hpa", "z700hpa"),
+                 tlabels = c("10 m", "1000 hpa", "850 hpa", "700 hpa"),
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_altitude.png",
                  height=2.5)
-sensitivity_plot(ws, maintag="z = 10m", comptag="z = 850hpa", title="Sensitivity to altitude", log=T, 
+sensitivity_plot(ws, maintag="z10m", comptag="z850hpa", title="Sensitivity to altitude", log=T, 
+                 tlevels = c("z10m", "z1000hpa", "z850hpa", "z700hpa"),
+                 tlabels = c("10 m", "1000 hpa", "850 hpa", "700 hpa"),
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_altitude_log.png",
                  height=2.5)
 file.copy("figures/windsheds/sensitivity/sensitivity_scatters_altitude_log.png",
@@ -384,38 +430,42 @@ file.copy("figures/windsheds/sensitivity/sensitivity_scatters_altitude_log.png",
 
 
 # accessibility functions
-fx <- list(access=list(list(name = "inv", fx = function(x){1/x}, form = "1/x"),
-                       list(name = "sqrtinv", fx = function(x) {sqrt(1/x)}, form = "sqrt(1/x)"),
-                       list(name = "exp995", fx = function(x) {.995 ^ x}, form = ".995 ^ x"),
-                       list(name = "exp99", fx = function(x) {.99 ^ x}, form = ".99 ^ x"),
-                       list(name = "exp95", fx = function(x) {.95 ^ x}, form = ".95 ^ x"),
-                       list(name = "invlog", fx = function(x) {1/log(x)}, form = "1/log(x)")),
+fx <- list(access=list(list(name = "inv", fx = function(x){1/x}, form = "1/h"),
+                       list(name = "sqrtinv", fx = function(x) {sqrt(1/x)}, form = "sqrt(1/h)"),
+                       list(name = "exp995", fx = function(x) {.995 ^ x}, form = ".995 ^ h"),
+                       list(name = "exp99", fx = function(x) {.99 ^ x}, form = ".99 ^ h"),
+                       list(name = "exp95", fx = function(x) {.95 ^ x}, form = ".95 ^ h"),
+                       list(name = "invlog", fx = function(x) {1/log(x)}, form = "1/log(h)")),
            tag=c("inv", "sqrtinv", "exp995", "exp99", "exp95", "invlog"))
 ws <- pmap_df(fx, windscapes, output="df", subsample=list(n=1000, seed=12345))
-sensitivity_plot(ws, maintag="inv", comptag="exp95",
+flabs <- map_chr(fx$access, "form")
+flevs <- map_chr(fx$access, "name")
+sensitivity_plot(ws, maintag="inv", comptag="exp95", tlevels = flevs, tlabels = flabs,
                  title="Sensitivity to accessibility function",
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_access.png",
                  height=2)
-sensitivity_plot(ws %>% na.omit(), maintag="inv", comptag="exp95",
+sensitivity_plot(ws %>% na.omit(), maintag="inv", comptag="exp95", tlevels = flevs, tlabels = flabs,
                  title="Sensitivity to accessibility function", log=T,
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_access_log.png",
                  height=2)
 curves <- map_df(fx$access, 
                  function(fun) data.frame(name=fun$name, fun=fun$form, 
                                           x = 1:1000, y = fun$fx(1:1000))) %>%
-  ggplot(aes(x, y, color=paste0("\"", name, "\": ", fun))) + 
+  mutate(fun = factor(fun, levels = flabs)) %>%
+  ggplot(aes(x, y, color=fun)) + 
   geom_line() +
   theme_minimal() +
   ylim(0, 1) +
   theme(#legend.position=c(.7, .7),
-        legend.title = element_blank()) +
+    legend.title = element_blank()) +
   labs(x="wind hours",
        y="wind accessibility") +
   coord_fixed(ratio=1000)
 ggsave("figures/windsheds/sensitivity/sensitivity_scatters_access_curves.png", curves,
        width=4, height=4, units="in")
 
-img <- readPNG("figures/windsheds/sensitivity/sensitivity_scatters_access_log.png") %>%
+library(grid)
+img <- png::readPNG("figures/windsheds/sensitivity/sensitivity_scatters_access_log.png") %>%
   rasterGrob(interpolate=TRUE)
 
 p <- (curves | plot_spacer()) / img
@@ -427,6 +477,7 @@ ggs(paste0("figures/manuscript/SI_fig_sens_access.png"),
                     x=c(.02, .02), 
                     y=c(.97, .43),
                     gp=gpar(fontsize=20, fontface="bold", col="black")))
+
 
 
 # analog function
