@@ -274,6 +274,7 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
       filter(is.finite(main), is.finite(comp)) %>%
       mutate_at(vars(main, comp), log10) %>%
       group_by(tag) %>%
+      filter(is.finite(main + comp + weight)) %>%
       summarize(r = wcor(main, comp, weights=weight),
                 main = max(10 ^ main, na.rm=T),
                 x = 10^((max(comp, na.rm=T)+min(comp, na.rm=T))/2))
@@ -290,7 +291,6 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
   
   p <- ggplot(d, aes(comp, main, color = mt )) +
     facet_grid(. ~ tag, scales="free") +
-    #facet_wrap( ~ tag, nrow = frows) +
     geom_point(alpha = 0.2, shape = 16, size = 0.5) +
     geom_text(data=cm, aes(x=x, label=paste("r =", round(r, 2))), 
               color="red", hjust=.5) +
@@ -302,6 +302,7 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
          y=paste0("Wind facilitation\nfor ", tlabels[tlevels == maintag], " (1/h)"))
   
   if(log) p <- p + scale_x_log10() + scale_y_log10()
+  if(frows > 1) p <- p + facet_wrap(~tag, nrow = frows)
   ggsave(outfile, p, width=8, height=height, units="in")
   
   
@@ -349,21 +350,40 @@ temp <- "data/geographic/processed/temperature.tif"
 ppt <- "data/geographic/processed/precipitation.tif"
 bio5 <- "data/geographic/processed/bio5.tif"
 bio6 <- "data/geographic/processed/bio6.tif"
-# method for determining precip sigma equivalent to temp sigma of 2:
-# r <- stack(c(temp, ppt))
-# 2 / sd(r[[1]][], na.rm = T) * sd(r[[3]][], na.rm = T)
-ws <- list(climdata = list(temp, bio5, bio6, ppt, c(temp, ppt), c(bio5, bio6), c(bio5, bio6, ppt)),
-           sigma = list(2, 2, 2, .05, c(2, .05), c(2, 2), c(2, 2, .05)), # change for ppt
-           tag = c("tmean", "bio5", "bio6", "ppt", "tmean_ppt", "bio5_bio6", "bio5_bio6_ppt")) %>% 
-  pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
-sensitivity_plot(ws, maintag="tmean", comptag="tmean_ppt", frows = 2,
+bio13 <- "data/geographic/processed/bio13.tif"
+bio14 <- "data/geographic/processed/bio14.tif"
+
+# sigmas \equivalent to temp sigma of 2:
+get_sigma <- function(new_raster, temp_raster, temp_sigma){
+  temp_sigma / sd(raster(temp_raster)[], na.rm = T) * sd(raster(new_raster)[], na.rm = T)
+}
+s1 <- 2
+s12 <- get_sigma(ppt, temp, s1)
+s5 <- get_sigma(bio5, temp, s1)
+s6 <- get_sigma(bio6, temp, s1)
+s13 <- get_sigma(bio13, temp, s1)
+s14 <- get_sigma(bio14, temp, s1)
+
+specs <- list(climdata = list(temp, bio5, bio6, ppt, bio13, bio14,
+                           c(temp, ppt), c(bio5, bio6), c(bio13, bio14),
+                           c(bio5, bio6, ppt), c(temp, bio13, bio14), c(bio5, bio6, bio13, bio14)),
+           sigma = list(s1, s5, s6, s12, s13, s14,  
+                        c(s1, s12), c(s5, s6), c(s13, s14),
+                        c(s5, s6, s12), c(s1, s13, s14), c(s5, s6, s13, s14)),
+           tag = c("temp", "b5", "b6", "prec", "b13", "b14",
+                   "temp_prec", "b5_b6", "b13_b14",
+                   "b5_b6_prec", "temp_b13_b14", "b5_b6_b13_b14"))
+ws <- specs %>% pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
+sensitivity_plot(ws, maintag="temp", comptag="temp_prec", frows = 2,
+                 tlabels = specs$tag, tlevels = specs$tag,
                  title="Sensitivity to climate variables", log=F,
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_vars.png",
-                 height=5)
-sensitivity_plot(ws, maintag="tmean", comptag="tmean_ppt",  frows = 2,
+                 height=3)
+sensitivity_plot(ws, maintag="temp", comptag="temp_prec", frows = 2,
+                 tlabels = specs$tag, tlevels = specs$tag,
                  title="Sensitivity to climate variables", log=T,
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_vars_log.png",
-                 height=5)
+                 height=3)
 file.copy("figures/windsheds/sensitivity/sensitivity_scatters_vars_log.png",
           "figures/manuscript/SI_fig_sens_vars.png", overwrite=T)
 
