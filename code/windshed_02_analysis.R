@@ -465,19 +465,19 @@ file.copy("figures/windsheds/sensitivity/sensitivity_scatters_seasons_log.png",
 
 
 # landscape radius
+tags <- c("d50km", "d100km", "d250km", "d500km", "d1000km", "d2500km")
+labs <- c("50 km", "100 km", "250 km", "500 km", "1000 km", "2500 km")
 ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif"),
-           radius=c(100, 250, 500, 1000),
-           tag=c("d100km", "d250km", "d500km", "d1000km")) %>%
+           radius=c(50, 100, 250, 500, 1000, 2500),
+           tag=c("d50km", "d100km", "d250km", "d500km", "d1000km", "d2500km")) %>%
   pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
 sensitivity_plot(ws, maintag="d250km", comptag="d1000km",
-                 tlevels = c("d100km", "d250km", "d500km", "d1000km"),
-                 tlabels = c("100 km", "250 km", "500 km", "1000 km"),
+                 tlevels = tags, tlabels = labs,
                  title="Sensitivity to landscape size",
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_radius.png",
                  height=2.5)
 sensitivity_plot(ws, maintag="d250km", comptag="d1000km",
-                 tlevels = c("d100km", "d250km", "d500km", "d1000km"),
-                 tlabels = c("100 km", "250 km", "500 km", "1000 km"),
+                 tlevels = tags, tlabels = labs,
                  title="Sensitivity to landscape size", log=T,
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_radius_log.png",
                  height=2.5)
