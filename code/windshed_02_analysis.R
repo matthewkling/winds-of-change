@@ -255,6 +255,7 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
                              comptag=NULL){
   
   xx <- x
+  if(is.null(tlevels)) tlevels <- tlabels
   
   d <- x %>%
     mutate(var = overlap_fwd_windshed_size / clim_fwd_windshed_size) %>%
@@ -396,23 +397,54 @@ ws <- list(data=c("data/windrose/windrose_p0_wnd10m.tif",
                   "data/windrose/windrose_p1_wnd10m.tif",
                   "data/windrose/windrose_p2_wnd10m.tif",
                   "data/windrose/windrose_p3_wnd10m.tif"),
-           tag=c("velocity_ignored", "velocity", "velocity_squared", "velocity_cubed")) %>%
+           tag=c("constant", "linear", "quadratic", "cubic")) %>%
   pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
-sensitivity_plot(ws, maintag="velocity", comptag="velocity_squared", 
-                 tlabels = c("velocity ignored", "velocity", "velocity squared", "velocity cubed"),
+sensitivity_plot(ws, maintag="linear", comptag="quadratic", 
+                 tlevels = c("constant", "linear", "quadratic", "cubic"),
+                 tlabels = c("constant", "linear", "quadratic", "cubic"),
                  title="Sensitivity to conductance function",
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_p.png",
                  height=3)
-sensitivity_plot(ws, maintag="velocity", comptag="velocity_squared",
-                 tlabels = c("velocity ignored", "velocity", "velocity squared", "velocity cubed"),
+sensitivity_plot(ws, maintag="linear", comptag="quadratic", 
+                 tlevels = c("constant", "linear", "quadratic", "cubic"),
+                 tlabels = c("constant", "linear", "quadratic", "cubic"),
                  title="Sensitivity to conductance function", log=T,
                  outfile="figures/windsheds/sensitivity/sensitivity_scatters_p_log.png",
                  height=3)
-file.copy("figures/windsheds/sensitivity/sensitivity_scatters_p_log.png",
-          "figures/manuscript/SI_fig_sens_p.png", overwrite=T)
+
+curves <- tibble(x = seq(.1, 50, .1),
+       constant = 1,
+       linear = x,
+       quadratic = x^2,
+       cubic = x^3) %>%
+  gather(stat, y, -x) %>%
+  mutate(stat = factor(stat, levels = c("cubic", "quadratic", "linear", "constant"))) %>%
+  
+  ggplot(aes(x, y, color = stat)) +
+  geom_line() +
+  scale_x_log10(breaks = c(.01, .1, 1, 10), labels = c(.01, .1, 1, 10)) +
+  scale_y_log10(breaks = c(.001, 1, 1000), labels = c(.001, 1, 1000)) +
+  theme_minimal() +
+  labs(x = "horizontal windspeed (m/s, log scale)",
+       y = "conductance\n(log scale)",
+       color = NULL)
+library(grid)
+img <- png::readPNG("figures/windsheds/sensitivity/sensitivity_scatters_p_log.png") %>%
+  rasterGrob(interpolate=TRUE)
+
+p <- (curves | plot_spacer() | plot_spacer()) / img + plot_layout(heights = c(1, 2))
+
+source("E:/edges/range-edges/code/utilities.r")
+ggs(paste0("figures/manuscript/SI_fig_sens_p.png"),
+    p, width=8, height=5, units="in",
+    add = grid.text(letters[1:2], 
+                    x=c(.02, .02), 
+                    y=c(.97, .53),
+                    gp=gpar(fontsize=20, fontface="bold", col="black")))
 
 
-# season
+
+ # season
 ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif",
                   "data/windrose/windrose_p1_wnd10m_DJF.tif",
                   "data/windrose/windrose_p1_wnd10m_MAM.tif",
