@@ -345,6 +345,9 @@ sensitivity_plot <- function(x, maintag, title, outfile, height,
 }
 
 
+
+
+
 # climate variables
 temp <- "data/geographic/processed/temperature.tif"
 ppt <- "data/geographic/processed/precipitation.tif"
@@ -353,7 +356,7 @@ bio6 <- "data/geographic/processed/bio6.tif"
 bio13 <- "data/geographic/processed/bio13.tif"
 bio14 <- "data/geographic/processed/bio14.tif"
 
-# sigmas \equivalent to temp sigma of 2:
+# sigmas equivalent to temp sigma of 2:
 get_sigma <- function(new_raster, temp_raster, temp_sigma){
   temp_sigma / sd(raster(temp_raster)[], na.rm = T) * sd(raster(new_raster)[], na.rm = T)
 }
@@ -388,7 +391,7 @@ file.copy("figures/windsheds/sensitivity/sensitivity_scatters_vars_log.png",
           "figures/manuscript/SI_fig_sens_vars.png", overwrite=T)
 
 
-# p exponents
+# conductance function
 ws <- list(data=c("data/windrose/windrose_p0_wnd10m.tif",
                   "data/windrose/windrose_p1_wnd10m.tif",
                   "data/windrose/windrose_p2_wnd10m.tif",
@@ -409,7 +412,7 @@ file.copy("figures/windsheds/sensitivity/sensitivity_scatters_p_log.png",
           "figures/manuscript/SI_fig_sens_p.png", overwrite=T)
 
 
-# seasonality
+# season
 ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif",
                   "data/windrose/windrose_p1_wnd10m_DJF.tif",
                   "data/windrose/windrose_p1_wnd10m_MAM.tif",
@@ -428,7 +431,29 @@ sensitivity_plot(ws, maintag="annual", comptag="December-February",
 file.copy("figures/windsheds/sensitivity/sensitivity_scatters_seasons_log.png",
           "figures/manuscript/SI_fig_sens_seasons.png", overwrite=T)
 
-# atmospheric layers
+
+# landscape radius
+ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif"),
+           radius=c(100, 250, 500, 1000),
+           tag=c("d100km", "d250km", "d500km", "d1000km")) %>%
+  pmap_df(windscapes, output="df", subsample=list(n=1000, seed=12345))
+sensitivity_plot(ws, maintag="d250km", comptag="d1000km",
+                 tlevels = c("d100km", "d250km", "d500km", "d1000km"),
+                 tlabels = c("100 km", "250 km", "500 km", "1000 km"),
+                 title="Sensitivity to landscape size",
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_radius.png",
+                 height=2.5)
+sensitivity_plot(ws, maintag="d250km", comptag="d1000km",
+                 tlevels = c("d100km", "d250km", "d500km", "d1000km"),
+                 tlabels = c("100 km", "250 km", "500 km", "1000 km"),
+                 title="Sensitivity to landscape size", log=T,
+                 outfile="figures/windsheds/sensitivity/sensitivity_scatters_radius_log.png",
+                 height=2.5)
+file.copy("figures/windsheds/sensitivity/sensitivity_scatters_radius_log.png",
+          "figures/manuscript/SI_fig_sens_radius.png", overwrite=T)
+
+
+# atmospheric layer
 ws <- list(data=c("data/windrose/windrose_p1_wnd10m.tif",
                   "data/windrose/windrose_p1_wnd1000.tif",
                   "data/windrose/windrose_p1_wnd850.tif",
@@ -449,7 +474,7 @@ file.copy("figures/windsheds/sensitivity/sensitivity_scatters_altitude_log.png",
           "figures/manuscript/SI_fig_sens_altitude.png", overwrite=T)
 
 
-# accessibility functions
+# accessibility function
 fx <- list(access=list(list(name = "inv", fx = function(x){1/x}, form = "1/h"),
                        list(name = "sqrtinv", fx = function(x) {sqrt(1/x)}, form = "sqrt(1/h)"),
                        list(name = "exp995", fx = function(x) {.995 ^ x}, form = ".995 ^ h"),
