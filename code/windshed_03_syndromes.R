@@ -105,6 +105,7 @@ rose <- stack("data/windrose/windrose_p1_wnd10m.tif") %>%
    rotate() %>% unwrap(180)
 
 # downweight conductance over water
+water = .1
 rose <- land %>%
    reclassify(c(NA, NA, water)) %>% # weight=.1 makes it possible to cross narrow waterways
    "*"(rose)
@@ -361,7 +362,7 @@ for(drn in c("inbound", "outbound")){
             panel.grid=element_blank()) +
       labs(x="Analog climate availability",
            y="Wind facilitation (1/h)",
-           color=NULL)
+           color=NULL, fill=NULL)
    
    map <- ggplot(d, aes(x, y, fill=syndrome)) +
       geom_point(data=d %>% filter(abs(x)<80, abs(y)<80) %>% sample_n(100), color="gray75", size=.01) +
@@ -399,7 +400,7 @@ for(drn in c("inbound", "outbound")){
    #file.copy(outfile, paste0("figures/manuscript/", basename(outfile)), overwrite = T)
    
    if(drn=="outbound"){
-      stop()
+      
       p <- scatter + archetypes + hist1 + map1 + hist + map +
          plot_layout(nrow=3, heights=c(1.5, 3, 3), widths=c(1, 4))
       ggs("figures/manuscript/SI_fig_syndromes.png", p,
