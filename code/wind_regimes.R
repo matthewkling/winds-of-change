@@ -202,11 +202,11 @@ lt <- lt[c(1, 2, 4, 3),]
 
 legend <- ggplot(sa, aes(speed, anisotropy)) +
       geom_point(color=sa$color, size=.1) +
-      shadowtext::geom_shadowtext(data=lt, 
-                                  label=c("high\nspeeds &\nconsistent\ndirection", "high\nspeeds &\nvariable\ndirection", 
-                                          "low\nspeeds &\nvariable\ndirection", "low\nspeeds &\nconsistent\ndirection"),
-                                  hjust=c(1,1,0,0), vjust=c(1,0,0,1),
-                                  color="black", bg.color="white", lineheight=.7) +
+      # shadowtext::geom_shadowtext(data=lt, 
+      #                             label=c("high\nspeeds &\nconsistent\ndirection", "high\nspeeds &\nvariable\ndirection", 
+      #                                     "low\nspeeds &\nvariable\ndirection", "low\nspeeds &\nconsistent\ndirection"),
+      #                             hjust=c(1,1,0,0), vjust=c(1,0,0,1),
+      #                             color="black", bg.color="white", lineheight=.7) +
       theme_minimal() +
       scale_x_log10(breaks=c(1,2,5,10)) +
       scale_y_sqrt(breaks=c(.02, .2, .5, 1)) +
@@ -324,6 +324,84 @@ cartoons <- ggplot(d) +
             legend.position="none")
 
 
+# empirical examples ##################################################
+
+ex <- c(601, 668, 818, 562)
+ed <- read_csv("figures/regimes/example_data.csv") %>%
+      mutate(id = factor(id, levels = ex,
+                         labels = c("\n\n\n[i]\n\nlow speeds &\nconsistent direction", "\n\n\n[ii]\n\nhigh speeds &\nconsistent direction", 
+                                    "\n\n\n[iii]\n\nhigh speeds &\nvariable direction", "\n\n\n[iv]\n\nlow speeds &\nvariable direction")))
+
+regime <- function(u, v, return="speed"){
+      uv <- cbind(u, v)
+      colnames(uv) <- NULL
+      u <- mean(uv[,1])
+      v <- mean(uv[,2])
+      
+      speeds <- sqrt(uv[,1]^2 + uv[,2]^2)
+      speed <- mean(speeds)
+      if(return=="speed") return(speed)
+      
+      dir <- do.call(atan2, as.list(colMeans(uv))) / pi * 180
+      
+      dirs <- atan2(uv[,1], uv[,2])
+      x <- sum(sin(dirs) * speeds) / sum(speeds)
+      y <- sum(cos(dirs) * speeds) / sum(speeds)
+      
+      rbar <- sqrt(x^2 + y^2) # mean resultant vector
+      iso <- sqrt(1-rbar) # circular standard deviation
+      
+      if(return=="anisotropy") return(1 - iso)
+}
+
+
+centroids <- ed %>%
+      group_by(id) %>%
+      summarize(speed = regime(u, v, "speed"),
+                aniso = regime(u, v, "anisotropy"),
+                x = x[1], y = y[1],
+                u = mean(u), v = mean(v)) %>%
+      mutate(letter = c("i", "ii", "iii", "iv")) %>%
+      mutate_at(vars(speed, aniso), signif, digits=2)
+
+centroids <- sa %>% dplyr::select(speed, anisotropy, color) %>%
+      rename(aniso = anisotropy) %>%
+      mutate_at(vars(speed, aniso), signif, digits=2) %>%
+      group_by(speed,aniso) %>% sample_n(1) %>%
+      right_join(centroids) %>%
+      mutate(dir = atan2(v, u))
+
+
+
+rad <- 5
+circle <- data.frame(angle=seq(0, pi*2, .01)) %>%
+      mutate(x=cos(angle) * rad, 
+             y=sin(angle) * rad)
+acol <- "black"
+lim <- 7.5
+
+examples <- ed %>% filter(abs(u) < lim, abs(v) < lim) %>%
+      ggplot(aes(u, v)) +
+      facet_grid(.~id, space="free", scales="free") +
+      geom_point(aes(color=id), alpha=.01, shape=16, size=1) +
+      geom_path(data=circle, aes(x, y), color=acol) +
+      geom_path(data=circle, aes(x*.6, y*.6), color=acol) +
+      annotate(geom="segment", x=0, xend=0, y=-rad*.1, yend=rad*.1, color=acol) +
+      annotate(geom="segment", x=-rad*.1, xend=rad*.1, y=0, yend=0, color=acol) +
+      annotate(geom="segment",
+               x=rad*c(0,1,-0,-1), xend=rad*c(0,1.13,-0,-1.13),
+               y=rad*c(1,0,-1,0), yend=rad*c(1.13,0,-1.13,0),
+               arrow=grid::arrow(type="closed", angle=15, length=unit(.1, "in")), color=acol) +
+      geom_segment(data=centroids, aes(x=0, y=0, xend=cos(dir)*rad, yend=sin(dir)*rad)) +
+      annotate(geom="text", x=0, y=rad * 1.23, label="N", color=acol, size=3) +
+      annotate(geom="text", x=0, y=-rad * .85, label=paste0(rad, " m/s"), color=acol, size=3) +
+      annotate(geom="text", x=0, y=-rad * .45, label=paste0(rad*.6, " m/s"), color=acol, size=3) +
+      scale_color_manual(values=centroids$color) +
+      theme_void() +
+      theme(legend.position="none")
+
+legend <- legend + geom_label(data=centroids, aes(x=speed, y=aniso, label=letter))
+
 
 # final composite figure ##################################################
 
@@ -331,11 +409,11 @@ if(machine == "pc") stop("particle trails historically failed to render on pc")
 devtools::source_url("https://raw.githubusercontent.com/matthewkling/range-edges/master/code/utilities.R")
 library(gridExtra)
 
-#map2 <- rasterGrob("figures/regimes/regimes_particles.png")
-p <- arrangeGrob(cartoons, legend, nrow=1, widths=c(3, 1.3))
+#p <- arrangeGrob(cartoons, legend, nrow=1, widths=c(3, 1.3))
+p <- arrangeGrob(examples, legend, nrow=1, widths=c(3, 1.3))
 p <- arrangeGrob(p, map_particles, ncol=1, heights=c(1, 2))
 
-ggsave("figures/tailwinds/speed_isotropy_direction.png", p, width=12, height=10, units="in", dpi=1000)
+#ggsave("figures/tailwinds/speed_isotropy_direction.png", p, width=12, height=10, units="in", dpi=1000)
 ggs("figures/manuscript/fig_1.png", p, width=12, height=10, units="in", dpi=1000,
     add=grid.text(letters[1:3], 
                   x=c(.02, .72, .02), 
