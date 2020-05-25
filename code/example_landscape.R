@@ -1,3 +1,7 @@
+
+# grab functions from windshed_02_analysis.r before running
+
+
 f <- read_csv("data/windshed/p1_30y_250km_inv.csv") %>%
   select(-runtime) %>%
   gather(var, value, -x, -y) %>%
@@ -17,6 +21,28 @@ i <- sample(1:nrow(ff), 1)
 # 183380, 2083858
 i <- 2083858
 
+
+
+
+# load current/future climate data
+climate <- stack("data/geographic/processed/temperature.tif") %>% unwrap(180)
+
+# load land data
+land <- raster("f:/cfsr/land.tif") %>% 
+  rotate() %>% unwrap(180)
+
+# load windrose data
+rose <- stack("data/windrose/windrose_p1_wnd10m.tif") %>%
+  rotate() %>% unwrap(180)
+
+# downweight conductance over water
+water=.1
+rose <- land %>%
+  reclassify(c(NA, NA, water)) %>% # weight=.1 makes it possible to cross narrow waterways
+  "*"(rose)
+
+access=list(name = "inv", fx = function(x){1/x}, form = "1/x")
+time_conv=identity
 
 radius = 250
 r <- woc(ff$x[i], ff$y[i], windrose=rose, climate=climate,
@@ -121,7 +147,7 @@ temp <- ggplot() +
   geom_raster(data=td, aes(x, y, fill=layer.1)) +
   geom_point(data=ff[i,c("x", "y")], 
              aes(x, y), color="red", size=pointsize) +
-  scale_fill_gradientn(colors=c("cyan", "blue", "purple", "red", "orange", "gold", "yellow"),
+  scale_fill_gradientn(colors=c("cyan", "dodgerblue", "blue", "purple", "red", "orange", "gold", "yellow"),
                        breaks=c(10, 14, 18)) +
   theme_void() +
   theme_void() + theme(legend.position="top", legend.title = element_text(size=10)) + 
@@ -129,13 +155,15 @@ temp <- ggplot() +
   labs(fill="Temperature (°C)")
 
 
-
+library(patchwork)
 
 p <- (temp / key) | clim | time | access | overlap 
 
 source("E:/edges/range-edges/code/utilities.r")
 
-ggs("figures/manuscript/fig_3.png", 
+library(grid)
+
+ggs("figures/manuscript/fig_3.pdf", 
     p, width=8.5, height=4.3, units="in", 
     add=list(grid.text(letters[1:10], 
                   x=rep(seq(.04, .8, length.out=5), each=2), 
