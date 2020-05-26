@@ -1,5 +1,17 @@
 
-# grab functions from windshed_02_analysis.r before running
+
+
+library(windscape)
+library(tidyverse)
+library(raster)
+library(gdistance)
+library(geosphere)
+
+select <- dplyr::select
+
+
+source("code/windshed_02_functions.R")
+
 
 
 f <- read_csv("data/windshed/p1_30y_250km_inv.csv") %>%
@@ -163,8 +175,8 @@ source("E:/edges/range-edges/code/utilities.r")
 
 library(grid)
 
-ggs("figures/manuscript/fig_3.pdf", 
-    p, width=8.5, height=4.3, units="in", 
+ggs("figures/manuscript/fig_3.png", 
+    p, width=8.5, height=4.3, units="in", dpi = 1000,
     add=list(grid.text(letters[1:10], 
                   x=rep(seq(.04, .8, length.out=5), each=2), 
                   y=rep(c(.8, .39), 5),
