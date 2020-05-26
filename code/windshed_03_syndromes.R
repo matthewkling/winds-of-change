@@ -23,7 +23,8 @@ select <- dplyr::select
 
 # adapted from windshed_03_examples.r
 
-stop("get functions and input datasets from windshed_02_analysis script")
+source("code/windshed_02_functions.R")
+
 
 
 

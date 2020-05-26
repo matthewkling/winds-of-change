@@ -17,7 +17,8 @@ library(ecoclim)
 select <- dplyr::select
 
 
-stop("get functions and input datasets from windshed_02_analysis script")
+source("code/windshed_02_functions.R")
+
 
 
 f <- read_csv("data/windshed/p1_30y_250km_inv.csv") %>%
