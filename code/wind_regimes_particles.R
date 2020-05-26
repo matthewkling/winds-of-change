@@ -25,7 +25,7 @@ library(sf)        # for manipulation of simple features objects
 library(lwgeom)    # for st_transform_proj()
 library(rworldmap) # for getMap()
 
-world <- getMap(resolution = "low") %>% rgeos::gUnaryUnion()
+world <- getMap(resolution = "low") %>% rgeos::gBuffer(width = 0) %>% rgeos::gUnaryUnion()
 world_sf <- st_as_sf(world)
 
 crs_wintri <- "+proj=wintri +datum=WGS84 +no_defs +over"
@@ -117,44 +117,4 @@ particle_trails <- function(d, # vector field rasters
 
 #f <- particle_trails(d = w[[c("u", "v")]], np = 100000, nt = 50, r = 1, scale = .1)
 #saveRDS(f, "data_speedsampling.rds")
-f <- readRDS("data/data_speedsampling.rds")
 
-ff <- f %>%
-      filter(abs(x)<180, abs(y)<90) %>%
-      group_by(id) %>%
-      mutate(span = any(between(x, -180, -150)) &
-                   any(between(x, 150, 180)),
-             sid = case_when(span & x > 0 ~ id,
-                             span & x < 0 ~ paste0(id, "b"),
-                             TRUE ~ id))
-
-fwt <- ff
-coordinates(fwt) <- c("x", "y")
-we <- raster::extract(w, fwt)
-fwt <- st_as_sf(fwt)
-st_crs(fwt) <- st_crs(world_sf)
-fwt <- st_transform_proj(fwt, crs = crs_wintri)
-
-fc <- st_coordinates(fwt) %>% as.data.frame()
-fwt <- bind_cols(fwt, fc)
-fwt <- bind_cols(fwt, as.data.frame(we))
-
-fwt <- fwt %>% mutate(anisoland = anisotropy * land,
-                      speedland = speed * land)
-
-wf <- which(is.finite(fwt$speedland))
-fwt$color <- "white"
-fwt$color[wf] <- colormap::colors2d(cbind(log10(fwt$speedland[wf]), 
-                                          sqrt(fwt$anisoland[wf])),
-                                    colors=c("red", "yellow", "cyan", "blue"),
-                                    xtrans="rank", ytrans="rank")
-
-map_particles <- ggplot() + 
-      geom_sf(data = wintri_outline, fill = "gray20", color = NA) + # ocean
-      geom_sf(data = world_wintri, color = "black", fill="black", size = 0.5/.pt) + # land
-      geom_path(data = fwt, aes(X, Y, group=sid, alpha=time), color=fwt$color, size=.1) + # wind
-      geom_sf(data = world_wintri, color = "black", fill=NA, size = .25) + # coastlines
-      coord_sf(datum = NULL, expand=F) +
-      theme_void() +
-      theme(legend.position="none")
-ggsave("figures/regimes/regimes_particles.png", width=20, height=12, units="in")
