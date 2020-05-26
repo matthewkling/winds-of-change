@@ -3,6 +3,9 @@ library(tidyverse)
 library(raster)
 library(dismo)
 
+source("code/windshed_02_functions.R")
+
+
 # custom windroses
 if(F){
   
@@ -62,7 +65,6 @@ if(F){
     writeRaster(outfile, overwrite=T)
 }
 
-stop("run the first parts of windshed_02_analysis")
 
 # species range data
 spdirs <- list.dirs("F:/little_trees/raw_data", full.names=T)
@@ -430,7 +432,7 @@ dgene <- readRDS("data/case_study/geneflow_data.rds")
 xlims <- c(range(dsdm$x) + c(0, -7))
 ylims <- c(range(dgene$y) + c(0, 3))
 
-
+palette <- c("#FFB000", "#FE6100", "#DC267F", "#785EF0", "#648FFF", "#64D3FF")
 
 p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
   geom_raster(data=filter(dsdm, is.finite(land)), fill="black") +
@@ -438,7 +440,7 @@ p1 <- ggplot(dgene, aes(x, y, fill=overlap_rev)) +
   annotate(geom="text", x=xlims[1]+4, y=ylims[1]+1.5, 
            size=4, lineheight=.75, hjust=0, vjust=0,
            label="genetic\nrescue") +
-  scale_fill_gradientn(colors=c("red", "yellow", "forestgreen"), na.value = "black") +
+  scale_fill_gradientn(colors = palette, na.value = "black") +
   theme_void() +
   scale_x_continuous(expand=c(0,0), limits=xlims) +
   scale_y_continuous(expand=c(0,0), limits=ylims) +
@@ -451,7 +453,7 @@ p2 <- ggplot(dsdm, aes(x, y)) +
   annotate(geom="text", x=xlims[1]+4, y=ylims[1]+1.5, 
            size=4, lineheight=.75, hjust=0, vjust=0,
            label="range\nexpansion") +
-  scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+  scale_fill_gradientn(colors = palette) +
   scale_x_continuous(expand=c(0,0), limits=xlims) +
   scale_y_continuous(expand=c(0,0), limits=ylims) +
   theme_void() +
@@ -481,7 +483,7 @@ p2c <- ggplot(dx, aes(x, y)) +
   geom_text(data=dxt, aes(x, y, label=label),
             nudge_x = 8, nudge_y = 6, hjust=0, lineheight=.75) +
   facet_wrap(~stat) +
-  scale_fill_gradientn(colors=c("red", "yellow", "forestgreen")) +
+  scale_fill_gradientn(colors = palette) +
   scale_x_continuous(expand=c(0,0), limits=xlims) +
   scale_y_continuous(expand=c(0,0), limits=ylims) +
   theme_void() +
@@ -506,7 +508,7 @@ p1c <- ggplot(dx1, aes(x, y)) +
   geom_text(data=dxt1, aes(x, y, label=label),
             nudge_x = 8, nudge_y = 6, hjust=0, lineheight=.75) +
   facet_wrap(~stat) +
-  scale_fill_gradientn(colors=c("red", "yellow", "forestgreen"), na.value="black") +
+  scale_fill_gradientn(colors=palette, na.value="black") +
   scale_x_continuous(expand=c(0,0), limits=xlims) +
   scale_y_continuous(expand=c(0,0), limits=ylims) +
   theme_void() +
